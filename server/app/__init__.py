@@ -1,0 +1,1 @@
+"""Dayby FastAPI application package."""

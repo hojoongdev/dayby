@@ -1,0 +1,31 @@
+# --- Secrets / environment ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Flutter / Dart (app/, added in P2) ---
+app/.dart_tool/
+app/.flutter-plugins*
+app/build/
+app/ios/Pods/
+app/ios/.symlinks/
+*.iml
+
+# --- macOS / editors ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- Local-only notes (never part of the shipped repo) ---
+babyvoice-spec.md
+CLAUDE.md
