@@ -9,6 +9,7 @@ dependencies = [
     "pymongo>=4.9",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "google-genai>=1.0",
 ]
 
 [project.optional-dependencies]

@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     stt_provider: str = "mock"
 
+    # Gemini (used when llm_provider == "gemini")
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+
     # Auth
     jwt_secret: str = "change-me-in-production"
 

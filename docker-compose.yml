@@ -23,8 +23,10 @@ services:
     environment:
       MONGODB_URI: mongodb://mongo:27017
       DB_NAME: dayby
-      LLM_PROVIDER: mock
-      STT_PROVIDER: mock
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      STT_PROVIDER: ${STT_PROVIDER:-mock}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       APP_ENV: development
     depends_on:
       mongo:
