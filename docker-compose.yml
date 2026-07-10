@@ -27,6 +27,7 @@ services:
       STT_PROVIDER: ${STT_PROVIDER:-mock}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-false}
       APP_ENV: development
     depends_on:
       mongo:

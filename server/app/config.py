@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Gemini (used when llm_provider == "gemini")
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    # Vertex AI Express mode: use a Vertex AI api key instead of an AI Studio key
+    # (no GCP project / service account needed).
+    google_genai_use_vertexai: bool = False
 
     # Auth
     jwt_secret: str = "change-me-in-production"
