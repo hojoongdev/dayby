@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from .config import settings
 from .db import client, ping
+from .routers import ingest
 
 logger = logging.getLogger("dayby")
 
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Dayby API", version="0.1.0", lifespan=lifespan)
+app.include_router(ingest.router)
 
 
 @app.get("/")
