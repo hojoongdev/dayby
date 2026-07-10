@@ -33,6 +33,13 @@ async def ping() -> bool:
         return False
 
 
+async def ensure_indexes() -> None:
+    """Create indexes for the timeline and family-scoped lookups (idempotent)."""
+    db = get_db()
+    await db.events.create_index([("family_id", 1), ("baby_id", 1), ("time", -1)])
+    await db.babies.create_index([("family_id", 1)])
+
+
 async def close_client() -> None:
     global _client
     if _client is not None:

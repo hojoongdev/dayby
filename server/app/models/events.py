@@ -61,3 +61,28 @@ class IngestTextRequest(BaseModel):
     lang: Optional[str] = None
     baby_ref: Optional[str] = None
     now: Optional[datetime] = None
+
+
+class EventCreate(BaseModel):
+    """A confirmed event to persist (after the user reviews the ingest result)."""
+
+    baby_id: str
+    type: str
+    subtype: Optional[str] = None
+    fields: dict[str, Any] = Field(default_factory=dict)
+    time: Optional[datetime] = None
+    note: Optional[str] = None
+    source: Optional[str] = None  # "voice" | "text" | "intent"
+    raw_text: Optional[str] = None
+
+
+class EventOut(BaseModel):
+    id: str
+    baby_id: str
+    type: str
+    subtype: Optional[str] = None
+    fields: dict[str, Any] = Field(default_factory=dict)
+    time: datetime
+    note: Optional[str] = None
+    source: Optional[str] = None
+    created_at: datetime

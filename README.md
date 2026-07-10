@@ -48,8 +48,8 @@ Every API key (LLM / STT) lives **only on the server** — never in the app.
 
 Built in vertical slices — each phase ends in a running, demoable state.
 
-- **P1 — Server + DB + text logging**  *(current)*
-- P2 — Flutter app + voice
+- P1 — Server + DB + text logging — done
+- **P2 — Flutter app + voice** *(current)*
 - P3 — Edit / delete / query + conversation context + multiple babies
 - P4 — Stats + real-time family sync
 - P5 — iOS Shortcuts / Action button / widgets
