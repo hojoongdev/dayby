@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .config import settings
-from .db import client, ping
-from .routers import ingest
+from .db import close_client, ping
+from .routers import families, ingest
 
 logger = logging.getLogger("dayby")
 
@@ -18,10 +18,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("MongoDB not reachable yet; check MONGODB_URI.")
     yield
-    await client.close()
+    await close_client()
 
 
 app = FastAPI(title="Dayby API", version="0.1.0", lifespan=lifespan)
+app.include_router(families.router)
 app.include_router(ingest.router)
 
 

@@ -3,22 +3,27 @@
 The response is a confirmation payload (nothing is saved yet). Saving happens
 after the user confirms, via the events endpoints (added in a later step).
 """
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends
 
-from fastapi import APIRouter
-
+from ..db import get_db
+from ..deps import get_current_family
 from ..models.events import IngestTextRequest, LlmContext, StructuredResult
 from ..providers import get_llm_provider
+from ..util import now
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 
 @router.post("/text", response_model=StructuredResult)
-async def ingest_text(req: IngestTextRequest) -> StructuredResult:
-    llm = get_llm_provider()
-    ctx = LlmContext(
-        now=req.now or datetime.now(timezone.utc),
-        baby_names=[],  # populated once babies exist (next step)
-        lang=req.lang,
-    )
-    return await llm.structure_log(req.text, ctx)
+async def ingest_text(
+    req: IngestTextRequest,
+    family: dict = Depends(get_current_family),
+) -> StructuredResult:
+    # Inject the family's baby names/nicknames so the model can resolve "who".
+    baby_names: list[str] = []
+    async for baby in get_db().babies.find({"family_id": family["_id"]}):
+        baby_names.append(baby["name"])
+        baby_names.extend(baby.get("nicknames", []))
+
+    ctx = LlmContext(now=req.now or now(), baby_names=baby_names, lang=req.lang)
+    return await get_llm_provider().structure_log(req.text, ctx)
