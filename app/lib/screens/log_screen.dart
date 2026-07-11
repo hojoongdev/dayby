@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../models/event.dart';
 import '../models/family.dart';
@@ -15,14 +16,75 @@ class LogScreen extends ConsumerStatefulWidget {
 
 class _LogScreenState extends ConsumerState<LogScreen> {
   final _input = TextEditingController();
+  final SpeechToText _speech = SpeechToText();
+  bool _speechAvailable = false;
+  bool _listening = false;
+
   StructuredResult? _result;
   int _resultSeq = 0;
   bool _loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
+
+  @override
   void dispose() {
+    if (_listening) _speech.cancel();
     _input.dispose();
     super.dispose();
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      final available = await _speech.initialize(
+        onStatus: _onSpeechStatus,
+        onError: (_) {
+          if (mounted) setState(() => _listening = false);
+        },
+      );
+      if (mounted) setState(() => _speechAvailable = available);
+    } catch (_) {
+      // Speech isn't available here (unsupported browser, denied, or tests):
+      // typing still works.
+      if (mounted) setState(() => _speechAvailable = false);
+    }
+  }
+
+  void _onSpeechStatus(String status) {
+    if (mounted && status != 'listening') setState(() => _listening = false);
+  }
+
+  Future<void> _toggleMic() async {
+    if (_listening) {
+      await _speech.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    setState(() {
+      _listening = true;
+      _result = null;
+    });
+    await _speech.listen(
+      onResult: (result) {
+        setState(() {
+          _input.text = result.recognizedWords;
+          _input.selection =
+              TextSelection.collapsed(offset: _input.text.length);
+        });
+        if (result.finalResult && _input.text.trim().isNotEmpty) {
+          setState(() => _listening = false);
+          _submit();
+        }
+      },
+      listenOptions: SpeechListenOptions(
+        partialResults: true,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -65,17 +127,33 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final active = ref.watch(activeBabyProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Log')),
+      floatingActionButton: _speechAvailable
+          ? FloatingActionButton(
+              onPressed: _toggleMic,
+              tooltip: _listening ? 'Stop' : 'Speak',
+              backgroundColor:
+                  _listening ? Theme.of(context).colorScheme.error : null,
+              child: Icon(_listening ? Icons.stop : Icons.mic),
+            )
+          : null,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (active != null)
-                Text(
-                  'Logging for ${active.name}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+              if (_listening)
+                Row(
+                  children: [
+                    Icon(Icons.mic, size: 16, color: Theme.of(context).colorScheme.error),
+                    const SizedBox(width: 6),
+                    Text('Listening…',
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                )
+              else if (active != null)
+                Text('Logging for ${active.name}',
+                    style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 8),
               TextField(
                 controller: _input,
