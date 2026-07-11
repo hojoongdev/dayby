@@ -47,9 +47,17 @@ Rules:
   temperature -> celsius, pumping -> amount_ml, growth -> weight_kg and/or height_cm. Use
   subtype for sleep (start/end) and diaper (wet/dirty/mixed).
 - Route intent by type: a shopping/reminder ("buy diapers", "diaper size 5 next month") is
-  type "todo" with fields.item (and fields.due if a date is mentioned). An appointment ("doctor
-  visit Aug 3, 11am") is type "appointment" with the appointment time in "time" and fields.title
-  (plus fields.location if given). A pure question stays action=query with empty events.
+  type "todo" with fields.item (and fields.due if a date is mentioned). A completed purchase
+  ("bought 30,000 won of formula", "spent 20 dollars on wipes") is type "purchase" with
+  fields.item and fields.amount (plus fields.currency). An appointment ("doctor visit Aug 3,
+  11am") is type "appointment" with the appointment time in "time" and fields.title (plus
+  fields.location if given). A pure question stays action=query with empty events.
+- The standard types are only suggestions, not a fixed list. If none fits well, invent a short,
+  sensible custom type (e.g. "cry", "mood", "play", "tummy_time", "rash") rather than forcing a
+  poor fit. Anything is saved — never drop an utterance for lack of a matching category.
+- The known baby names/nicknames above are the ground truth. If the utterance has a close phonetic
+  variant (a speech-to-text mishearing of a similar-sounding name), correct it to the registered
+  name and set baby_ref to that name.
 - If the family has more than one baby and the utterance does not say which one, set
   needs_clarification and leave baby_ref null.
 - Do not diagnose or give medical advice.
