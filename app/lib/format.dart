@@ -25,6 +25,32 @@ String formatDate(DateTime t) {
   return '${_months[l.month - 1]} ${l.day}, ${l.year}';
 }
 
+/// "just now" / "45m ago" / "2h 10m ago" / "3d ago"
+String formatAgo(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ${d.inMinutes % 60}m ago';
+  return '${d.inDays}d ago';
+}
+
+/// "12 days old" / "3 months old" / "2 years old"
+String formatAge(DateTime birth) {
+  final now = DateTime.now();
+  var months = (now.year - birth.year) * 12 + (now.month - birth.month);
+  if (now.day < birth.day) months -= 1;
+  if (months < 1) return '${now.difference(birth).inDays} days old';
+  if (months < 24) return '$months months old';
+  return '${months ~/ 12} years old';
+}
+
+/// True if the instant falls on today in the device's local time.
+bool isToday(DateTime t) {
+  final l = t.toLocal();
+  final now = DateTime.now();
+  return l.year == now.year && l.month == now.month && l.day == now.day;
+}
+
 /// "amount_ml" -> "amount ml"
 String prettifyKey(String key) => key.replaceAll('_', ' ');
 

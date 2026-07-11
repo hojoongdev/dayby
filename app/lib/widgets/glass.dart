@@ -11,17 +11,19 @@ class GlassCard extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.radius = 22,
     this.blur = 18,
+    this.margin,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final double radius;
   final double blur;
+  final EdgeInsetsGeometry? margin;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return ClipRRect(
+    final card = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
@@ -38,6 +40,7 @@ class GlassCard extends StatelessWidget {
         ),
       ),
     );
+    return margin == null ? card : Padding(padding: margin!, child: card);
   }
 }
 

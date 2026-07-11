@@ -1,5 +1,6 @@
 import 'package:dayby/api/api_client.dart';
 import 'package:dayby/main.dart';
+import 'package:dayby/models/event.dart';
 import 'package:dayby/models/family.dart';
 import 'package:dayby/providers.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,10 @@ class _FakeApiClient extends ApiClient {
 
   @override
   Future<List<Baby>> listBabies() async => babies;
+
+  @override
+  Future<List<Event>> listEvents({String? babyId, String? type, int limit = 100}) async =>
+      const [];
 }
 
 void main() {

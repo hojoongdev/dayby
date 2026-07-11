@@ -18,6 +18,10 @@ class _FailingApiClient extends ApiClient {
   Future<List<Baby>> listBabies() async => babies;
 
   @override
+  Future<List<Event>> listEvents({String? babyId, String? type, int limit = 100}) async =>
+      const [];
+
+  @override
   Future<StructuredResult> ingestText(String text, {String? lang}) async {
     throw DioException(
       requestOptions: RequestOptions(path: '/ingest/text'),
@@ -44,6 +48,9 @@ void main() {
         child: const DaybyApp(),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Log')); // switch from Home to the Log tab
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'fed 120 ml');

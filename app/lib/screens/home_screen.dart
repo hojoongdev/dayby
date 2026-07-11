@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard_screen.dart';
 import 'log_screen.dart';
 import 'settings_screen.dart';
 import 'timeline_screen.dart';
@@ -14,7 +15,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
 
-  static const _tabs = [LogScreen(), TimelineScreen(), SettingsScreen()];
+  static const _tabs = [
+    DashboardScreen(),
+    LogScreen(),
+    TimelineScreen(),
+    SettingsScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +30,11 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
           NavigationDestination(
             icon: Icon(Icons.mic_none_outlined),
             selectedIcon: Icon(Icons.mic),
