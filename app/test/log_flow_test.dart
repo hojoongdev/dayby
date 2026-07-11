@@ -81,7 +81,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
 
-    expect(find.text('Confirm'), findsOneWidget);
+    // The app confirms its understanding in a chat bubble (not the raw words).
+    expect(find.text('Feeding · formula · 120 ml'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Save'));
     await tester.pumpAndSettle();

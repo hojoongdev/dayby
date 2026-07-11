@@ -2,10 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
 import '../providers.dart';
 import '../widgets/confirm_card.dart';
+import '../widgets/glass.dart';
+
+/// One line in the conversation: the app's confirmation or acknowledgement.
+/// The caregiver's own words are intentionally not echoed back.
+class _Msg {
+  const _Msg({required this.title, this.subtitle, this.saved = false});
+
+  final String title;
+  final String? subtitle;
+  final bool saved;
+}
 
 class LogScreen extends ConsumerStatefulWidget {
   const LogScreen({super.key});
@@ -16,13 +28,16 @@ class LogScreen extends ConsumerStatefulWidget {
 
 class _LogScreenState extends ConsumerState<LogScreen> {
   final _input = TextEditingController();
+  final _scroll = ScrollController();
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable = false;
   bool _listening = false;
 
-  StructuredResult? _result;
-  int _resultSeq = 0;
-  bool _loading = false;
+  final List<_Msg> _history = [];
+  StructuredResult? _pending;
+  String _lastText = '';
+  bool _thinking = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -34,27 +49,36 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   void dispose() {
     if (_listening) _speech.cancel();
     _input.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
   Future<void> _initSpeech() async {
     try {
       final available = await _speech.initialize(
-        onStatus: _onSpeechStatus,
+        onStatus: (s) {
+          if (mounted && s != 'listening') setState(() => _listening = false);
+        },
         onError: (_) {
           if (mounted) setState(() => _listening = false);
         },
       );
       if (mounted) setState(() => _speechAvailable = available);
     } catch (_) {
-      // Speech isn't available here (unsupported browser, denied, or tests):
-      // typing still works.
       if (mounted) setState(() => _speechAvailable = false);
     }
   }
 
-  void _onSpeechStatus(String status) {
-    if (mounted && status != 'listening') setState(() => _listening = false);
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   Future<void> _toggleMic() async {
@@ -66,7 +90,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final lang = ref.read(voiceLangProvider);
     setState(() {
       _listening = true;
-      _result = null;
+      _pending = null;
     });
     await _speech.listen(
       onResult: (result) {
@@ -91,36 +115,89 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   Future<void> _submit() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _loading) return;
+    if (text.isEmpty || _thinking) return;
     final messenger = ScaffoldMessenger.of(context);
     final api = ref.read(apiClientProvider);
     final lang = ref.read(voiceLangProvider);
+    _lastText = text;
+    _input.clear();
     setState(() {
-      _loading = true;
-      _result = null;
+      _thinking = true;
+      _pending = null;
     });
+    _scrollToBottom();
     try {
       final result = await api.ingestText(text, lang: lang);
       if (!mounted) return;
       setState(() {
-        _result = result;
-        _resultSeq++;
-        _loading = false;
+        _pending = result;
+        _thinking = false;
       });
+      _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() => _thinking = false);
       messenger.showSnackBar(SnackBar(content: Text('Could not process: $e')));
     }
   }
 
-  void _onSaved(Event saved) {
+  Future<void> _saveEvent(StructuredEvent e, Baby baby) async {
     final messenger = ScaffoldMessenger.of(context);
-    _input.clear();
-    setState(() => _result = null);
+    final api = ref.read(apiClientProvider);
+    setState(() => _saving = true);
+    try {
+      final saved = await api.createEvent(
+        babyId: baby.id,
+        type: e.type,
+        subtype: e.subtype,
+        fields: e.fields,
+        time: e.time?.toUtc(),
+        note: e.note,
+        rawText: _lastText,
+      );
+      _afterSave(saved);
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(content: Text('Could not save: $err')));
+    }
+  }
+
+  void _afterSave(Event saved) {
     ref.invalidate(eventsProvider(saved.babyId));
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Saved to the timeline')),
+    setState(() {
+      _saving = false;
+      _pending = null;
+      _history.add(_Msg(
+        title: eventSummary(saved.type, saved.subtype, saved.fields),
+        subtitle: 'Saved to the timeline',
+        saved: true,
+      ));
+    });
+    _scrollToBottom();
+  }
+
+  void _edit(StructuredEvent e, List<Baby> babies, Baby active) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: ConfirmCard(
+            event: e,
+            babies: babies,
+            babyId: active.id,
+            rawText: _lastText,
+            onSaved: (saved) {
+              Navigator.pop(ctx);
+              _afterSave(saved);
+            },
+            onDiscard: () => Navigator.pop(ctx),
+          ),
+        ),
+      ),
     );
   }
 
@@ -129,80 +206,88 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final babies = ref.watch(babiesProvider).value ?? const <Baby>[];
     final active = ref.watch(activeBabyProvider);
     final voiceLang = ref.watch(voiceLangProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Log')),
-      floatingActionButton: _speechAvailable
-          ? FloatingActionButton(
-              onPressed: _toggleMic,
-              tooltip: _listening ? 'Stop' : 'Speak',
-              backgroundColor:
-                  _listening ? Theme.of(context).colorScheme.error : null,
-              child: Icon(_listening ? Icons.stop : Icons.mic),
-            )
-          : null,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('Dayby'),
+        backgroundColor: Colors.transparent,
+        actions: [
+          if (_speechAvailable)
+            TextButton(
+              onPressed: () => ref
+                  .read(voiceLangProvider.notifier)
+                  .set(voiceLang == 'ko' ? 'en' : 'ko'),
+              child: Text(voiceLang == 'ko' ? 'KO' : 'EN'),
+            ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(child: _conversation(active, babies)),
+                _composeBar(active),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _conversation(Baby? active, List<Baby> babies) {
+    return ListView(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      children: [
+        _bubble(
+          active == null
+              ? 'Add a baby in Settings to start logging.'
+              : 'Tap the mic and tell me what happened.',
+        ),
+        for (final m in _history)
+          _bubble(m.title, subtitle: m.subtitle, saved: m.saved),
+        if (_thinking) _bubble('…'),
+        if (_pending != null && active != null)
+          _confirm(_pending!, active, babies),
+      ],
+    );
+  }
+
+  Widget _bubble(String title, {String? subtitle, bool saved = false}) {
+    final theme = Theme.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: GlassCard(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _listening
-                        ? Row(
-                            children: [
-                              Icon(Icons.mic,
-                                  size: 16,
-                                  color: Theme.of(context).colorScheme.error),
-                              const SizedBox(width: 6),
-                              Text('Listening…',
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ],
-                          )
-                        : active != null
-                            ? Text('Logging for ${active.name}',
-                                style: Theme.of(context).textTheme.bodySmall)
-                            : const SizedBox.shrink(),
-                  ),
-                  if (_speechAvailable)
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(value: 'ko', label: Text('Korean')),
-                        ButtonSegment(value: 'en', label: Text('English')),
-                      ],
-                      selected: {voiceLang},
-                      showSelectedIcon: false,
-                      onSelectionChanged: (s) =>
-                          ref.read(voiceLangProvider.notifier).set(s.first),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _input,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  hintText: 'e.g. fed 120 ml, wet diaper, went to sleep',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: _loading ? null : _submit,
-                  ),
+              if (saved) ...[
+                Icon(Icons.check_circle, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.bodyLarge),
+                    if (subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant)),
+                      ),
+                  ],
                 ),
               ),
-              if (_loading)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16),
-                  child: LinearProgressIndicator(),
-                ),
-              if (active == null && !_loading)
-                const _Hint('Add a baby in Settings to start logging.')
-              else if (_result != null)
-                _buildResult(_result!, active!, babies),
             ],
           ),
         ),
@@ -210,53 +295,99 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     );
   }
 
-  Widget _buildResult(StructuredResult result, Baby active, List<Baby> babies) {
-    if (result.needsClarification != null) {
-      return _Hint(result.needsClarification!);
+  Widget _confirm(StructuredResult r, Baby active, List<Baby> babies) {
+    if (r.needsClarification != null) return _bubble(r.needsClarification!);
+    if (r.action == 'query') {
+      return _bubble('Asking about your logs is coming soon.',
+          subtitle: r.events.isEmpty ? null : null);
     }
-    if (result.action == 'query') {
-      return const _Hint(
-        'That looks like a question. Asking about your logs is coming soon — '
-        'for now, try stating what happened.',
-      );
+    if (r.events.isEmpty) {
+      return _bubble("I couldn't catch that — try again.");
     }
-    if (result.events.isEmpty) {
-      return const _Hint("I couldn't find anything to log. Try rephrasing.");
-    }
-    return Column(
-      key: ValueKey(_resultSeq),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final event in result.events)
-          ConfirmCard(
-            event: event,
-            babies: babies,
-            babyId: active.id,
-            rawText: _input.text.trim(),
-            onSaved: _onSaved,
-            onDiscard: () => setState(() => _result = null),
+    final e = r.events.first;
+    final theme = Theme.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(eventSummary(e.type, e.subtype, e.fields),
+                  style: theme.textTheme.titleMedium),
+              if (e.note != null && e.note!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(e.note!, style: theme.textTheme.bodyMedium),
+                ),
+              const SizedBox(height: 4),
+              Text(formatTime(e.time ?? DateTime.now()),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: _saving ? null : () => _edit(e, babies, active),
+                    child: const Text('Edit'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: _saving ? null : () => _saveEvent(e, active),
+                    child: _saving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Save'),
+                  ),
+                ],
+              ),
+            ],
           ),
-      ],
+        ),
+      ),
     );
   }
-}
 
-class _Hint extends StatelessWidget {
-  const _Hint(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+  Widget _composeBar(Baby? active) {
+    final theme = Theme.of(context);
+    final canType = active != null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      child: GlassCard(
+        radius: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: _speechAvailable && canType ? _toggleMic : null,
+              tooltip: _listening ? 'Stop' : 'Speak',
+              color: _listening ? theme.colorScheme.error : theme.colorScheme.primary,
+              icon: Icon(_listening ? Icons.stop_circle : Icons.mic),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _input,
+                enabled: canType,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration.collapsed(
+                  hintText: _listening ? 'Listening…' : 'Say or type…',
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: (_thinking || !canType) ? null : _submit,
+              icon: const Icon(Icons.send),
+            ),
+          ],
+        ),
       ),
-      child: Text(text, style: TextStyle(color: scheme.onSurfaceVariant)),
     );
   }
 }
