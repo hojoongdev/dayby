@@ -27,5 +27,5 @@ app/ios/.symlinks/
 .vscode/
 
 # --- Local-only notes (never part of the shipped repo) ---
-babyvoice-spec.md
+dayby-spec.md
 CLAUDE.md
