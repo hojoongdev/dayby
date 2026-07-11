@@ -63,6 +63,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       if (mounted) setState(() => _listening = false);
       return;
     }
+    final lang = ref.read(voiceLangProvider);
     setState(() {
       _listening = true;
       _result = null;
@@ -81,6 +82,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       },
       listenOptions: SpeechListenOptions(
         partialResults: true,
+        localeId: lang == 'ko' ? 'ko-KR' : 'en-US',
         listenFor: const Duration(seconds: 30),
         pauseFor: const Duration(seconds: 3),
       ),
@@ -92,12 +94,13 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     if (text.isEmpty || _loading) return;
     final messenger = ScaffoldMessenger.of(context);
     final api = ref.read(apiClientProvider);
+    final lang = ref.read(voiceLangProvider);
     setState(() {
       _loading = true;
       _result = null;
     });
     try {
-      final result = await api.ingestText(text);
+      final result = await api.ingestText(text, lang: lang);
       if (!mounted) return;
       setState(() {
         _result = result;
@@ -125,6 +128,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   Widget build(BuildContext context) {
     final babies = ref.watch(babiesProvider).value ?? const <Baby>[];
     final active = ref.watch(activeBabyProvider);
+    final voiceLang = ref.watch(voiceLangProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Log')),
       floatingActionButton: _speechAvailable
@@ -142,18 +146,38 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_listening)
-                Row(
-                  children: [
-                    Icon(Icons.mic, size: 16, color: Theme.of(context).colorScheme.error),
-                    const SizedBox(width: 6),
-                    Text('Listening…',
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                )
-              else if (active != null)
-                Text('Logging for ${active.name}',
-                    style: Theme.of(context).textTheme.bodySmall),
+              Row(
+                children: [
+                  Expanded(
+                    child: _listening
+                        ? Row(
+                            children: [
+                              Icon(Icons.mic,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.error),
+                              const SizedBox(width: 6),
+                              Text('Listening…',
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          )
+                        : active != null
+                            ? Text('Logging for ${active.name}',
+                                style: Theme.of(context).textTheme.bodySmall)
+                            : const SizedBox.shrink(),
+                  ),
+                  if (_speechAvailable)
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'ko', label: Text('Korean')),
+                        ButtonSegment(value: 'en', label: Text('English')),
+                      ],
+                      selected: {voiceLang},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) =>
+                          ref.read(voiceLangProvider.notifier).set(s.first),
+                    ),
+                ],
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _input,

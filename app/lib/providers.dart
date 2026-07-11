@@ -9,6 +9,7 @@ const familyIdKey = 'family_id';
 const familyNameKey = 'family_name';
 const inviteCodeKey = 'invite_code';
 const selectedBabyIdKey = 'selected_baby_id';
+const voiceLangKey = 'voice_lang';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('overridden in main'),
@@ -78,3 +79,18 @@ final activeBabyProvider = Provider<Baby?>((ref) {
 final eventsProvider = FutureProvider.family<List<Event>, String>(
   (ref, babyId) => ref.watch(apiClientProvider).listEvents(babyId: babyId),
 );
+
+/// Spoken language for voice input ("ko" | "en"). Sets the STT locale and the
+/// hint sent to the LLM. Defaults to Korean — Dayby is a Korean-first app.
+class VoiceLangNotifier extends Notifier<String> {
+  @override
+  String build() => ref.watch(sharedPrefsProvider).getString(voiceLangKey) ?? 'ko';
+
+  Future<void> set(String lang) async {
+    await ref.read(sharedPrefsProvider).setString(voiceLangKey, lang);
+    state = lang;
+  }
+}
+
+final voiceLangProvider =
+    NotifierProvider<VoiceLangNotifier, String>(VoiceLangNotifier.new);
