@@ -32,6 +32,13 @@ def _first_number(text: str) -> int | float | None:
 class MockLLMProvider(LLMProvider):
     name = "mock"
 
+    async def answer_query(
+        self, question: str, events: list[dict], ctx: LlmContext
+    ) -> str:
+        # Offline stand-in: real answering needs a real model. Give a truthful
+        # fallback that still reflects the data size.
+        return f"I have {len(events)} logged events, but I need a real model to answer that."
+
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
         lower = text.lower().strip()
         lang = ctx.lang or "en"

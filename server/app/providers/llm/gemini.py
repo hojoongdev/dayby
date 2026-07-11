@@ -4,6 +4,7 @@ Handles arbitrary phrasing in any language (English, Korean, ...). Requires
 GEMINI_API_KEY; the model id is configurable via GEMINI_MODEL. Set
 GOOGLE_GENAI_USE_VERTEXAI=true to use a Vertex AI Express api key.
 """
+import json
 import logging
 
 from google import genai
@@ -53,3 +54,30 @@ class GeminiLLMProvider(LLMProvider):
                 ],
                 lang=ctx.lang or "en",
             )
+
+    async def answer_query(
+        self, question: str, events: list[dict], ctx: LlmContext
+    ) -> str:
+        instruction = (
+            "You are a warm baby-care assistant. Answer the caregiver's question using ONLY "
+            "the logged events provided. If the data does not contain the answer, say you don't "
+            "have that logged yet. Be concise and reply in the SAME language as the question. "
+            "Event times are UTC; when you mention a time, convert it to the caller's local "
+            "timezone (the offset in the current local time below) and state it naturally. "
+            "Do not diagnose; for health concerns, gently suggest consulting a pediatrician.\n"
+            f"Current local time (with offset): {ctx.now.isoformat()}"
+        )
+        context = json.dumps(events, ensure_ascii=False, default=str)
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=f"Question: {question}\n\nLogged events (JSON): {context}",
+                config=types.GenerateContentConfig(
+                    system_instruction=instruction,
+                    temperature=0.2,
+                ),
+            )
+            return (response.text or "").strip()
+        except Exception:
+            logger.exception("Gemini answer_query failed")
+            return "Sorry, I couldn't look that up right now."

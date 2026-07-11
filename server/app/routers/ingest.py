@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ..db import get_db
 from ..deps import get_current_family
 from ..models.events import (
+    Action,
     IngestTextRequest,
     IngestVoiceResponse,
     LlmContext,
@@ -30,6 +31,32 @@ async def _baby_names(family: dict) -> list[str]:
     return names
 
 
+async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
+    """Compact recent events for grounding a query answer (newest first)."""
+    out: list[dict] = []
+    cursor = get_db().events.find({"family_id": family["_id"]}).sort("time", -1).limit(limit)
+    async for e in cursor:
+        t = e.get("time")
+        out.append({
+            "type": e.get("type"),
+            "subtype": e.get("subtype"),
+            "fields": e.get("fields", {}),
+            "time": t.isoformat() if hasattr(t, "isoformat") else str(t),
+            "note": e.get("note"),
+        })
+    return out
+
+
+async def _answer_if_query(
+    result: StructuredResult, family: dict, ctx: LlmContext, question: str
+) -> StructuredResult:
+    """For a question, answer it from the logged events (grounded) into `reply`."""
+    if result.action == Action.query:
+        events = await _recent_events(family)
+        result.reply = await get_llm_provider().answer_query(question, events, ctx)
+    return result
+
+
 @router.post("/text", response_model=StructuredResult)
 async def ingest_text(
     req: IngestTextRequest,
@@ -40,7 +67,8 @@ async def ingest_text(
         baby_names=await _baby_names(family),
         lang=req.lang,
     )
-    return await get_llm_provider().structure_log(req.text, ctx)
+    result = await get_llm_provider().structure_log(req.text, ctx)
+    return await _answer_if_query(result, family, ctx, result.query_text or req.text)
 
 
 @router.post("/voice", response_model=IngestVoiceResponse)
@@ -61,4 +89,5 @@ async def ingest_voice(
     transcript = await get_stt_provider().transcribe(audio, lang)
     ctx = LlmContext(now=now(), baby_names=await _baby_names(family), lang=lang)
     result = await get_llm_provider().structure_log(transcript, ctx)
+    result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     return IngestVoiceResponse(transcript=transcript, result=result)

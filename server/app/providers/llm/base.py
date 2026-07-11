@@ -12,3 +12,10 @@ class LLMProvider(ABC):
     @abstractmethod
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
         ...
+
+    @abstractmethod
+    async def answer_query(
+        self, question: str, events: list[dict], ctx: LlmContext
+    ) -> str:
+        """Answer a natural-language question grounded ONLY in the given events."""
+        ...
