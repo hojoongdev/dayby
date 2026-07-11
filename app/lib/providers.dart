@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
+import 'models/event.dart';
 import 'models/family.dart';
 
 const familyIdKey = 'family_id';
@@ -54,3 +55,8 @@ final activeBabyProvider = Provider<Baby?>((ref) {
   final id = ref.watch(selectedBabyIdProvider);
   return babies.firstWhere((b) => b.id == id, orElse: () => babies.first);
 });
+
+/// Timeline for one baby, newest first. Invalidate to refetch after a save.
+final eventsProvider = FutureProvider.family<List<Event>, String>(
+  (ref, babyId) => ref.watch(apiClientProvider).listEvents(babyId: babyId),
+);

@@ -21,3 +21,34 @@ String formatClock(DateTime t) {
 
 /// "amount_ml" -> "amount ml"
 String prettifyKey(String key) => key.replaceAll('_', ' ');
+
+String _capitalize(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+/// A one-line human summary, e.g. "Feeding · formula · 120 ml".
+String eventSummary(String type, String? subtype, Map<String, dynamic> fields) {
+  final parts = <String>[_capitalize(type)];
+  if (subtype != null && subtype.isNotEmpty) parts.add(subtype);
+  fields.forEach((key, value) {
+    parts.add(switch (key) {
+      'amount_ml' => '$value ml',
+      'amount_oz' => '$value oz',
+      'celsius' => '$value°C',
+      'duration_min' => '$value min',
+      _ => '${prettifyKey(key)} $value',
+    });
+  });
+  return parts.join(' · ');
+}
+
+/// "Today" / "Yesterday" / "Jul 10" (adds the year only when it differs).
+String formatDayHeader(DateTime t, DateTime now) {
+  final l = t.toLocal();
+  final day = DateTime(l.year, l.month, l.day);
+  final today = DateTime(now.year, now.month, now.day);
+  final diff = today.difference(day).inDays;
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Yesterday';
+  final year = day.year == now.year ? '' : ', ${day.year}';
+  return '${_months[day.month - 1]} ${day.day}$year';
+}

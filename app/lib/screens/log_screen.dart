@@ -53,6 +53,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final messenger = ScaffoldMessenger.of(context);
     _input.clear();
     setState(() => _result = null);
+    ref.invalidate(eventsProvider(saved.babyId));
     messenger.showSnackBar(
       const SnackBar(content: Text('Saved to the timeline')),
     );
