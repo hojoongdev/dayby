@@ -48,8 +48,8 @@ class ApiClient {
   }
 
   Future<StructuredResult> ingestText(String text, {String? lang}) async {
-    final res =
-        await _dio.post('/ingest/text', data: {'text': text, 'lang': ?lang});
+    final res = await _dio.post('/ingest/text',
+        data: {'text': text, 'lang': ?lang, 'now': _localNowIso()});
     return StructuredResult.fromJson(res.data as Map<String, dynamic>);
   }
 
@@ -94,4 +94,17 @@ class ApiClient {
   String? _dateOnly(DateTime? d) => d == null
       ? null
       : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// The device's current local time as an offset-aware ISO 8601 string, so the
+  /// server resolves relative and clock times ("last night", "8am") in the
+  /// user's timezone. What gets stored is still UTC.
+  String _localNowIso() {
+    final now = DateTime.now();
+    final off = now.timeZoneOffset;
+    final sign = off.isNegative ? '-' : '+';
+    final abs = off.abs();
+    final hh = abs.inHours.toString().padLeft(2, '0');
+    final mm = (abs.inMinutes % 60).toString().padLeft(2, '0');
+    return '${now.toIso8601String()}$sign$hh:$mm';
+  }
 }

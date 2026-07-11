@@ -12,7 +12,7 @@ def build_system_instruction(ctx: LlmContext) -> str:
     types_ = ", ".join(STANDARD_EVENT_TYPES)
     return f"""You extract a structured baby-care log entry from a short caregiver utterance.
 
-Current time (ISO 8601, UTC): {ctx.now.isoformat()}
+Current time (ISO 8601, the caller's local time with UTC offset): {ctx.now.isoformat()}
 Known baby names/nicknames: {babies}
 Standard event types: {types_}
 
@@ -40,6 +40,8 @@ Rules:
 - The utterance may be in ANY language (English, Korean, ...). Detect it and set "lang".
   Keep "note" in the original language.
 - A question ("when was the last feeding?") is action=query with an empty events list.
+- Resolve relative and clock times ("last night", "8am", "two hours ago") against the current
+  local time above, in that same timezone. Return "time" as ISO 8601 (with the offset, or UTC "Z").
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,
   temperature -> celsius, pumping -> amount_ml. Use subtype for sleep (start/end) and
   diaper (wet/dirty/mixed).
