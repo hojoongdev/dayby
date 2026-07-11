@@ -6,47 +6,141 @@ import '../models/event.dart';
 import '../providers.dart';
 import '../widgets/event_tile.dart';
 
-class TimelineScreen extends ConsumerWidget {
+class TimelineScreen extends ConsumerStatefulWidget {
   const TimelineScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TimelineScreen> createState() => _TimelineScreenState();
+}
+
+class _TimelineScreenState extends ConsumerState<TimelineScreen> {
+  String? _type; // null = all categories
+  DateTime? _day; // null = any date
+
+  bool _sameDay(DateTime a, DateTime b) {
+    final l = a.toLocal();
+    return l.year == b.year && l.month == b.month && l.day == b.day;
+  }
+
+  Future<void> _pickDay() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _day ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+    );
+    if (picked != null) setState(() => _day = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final active = ref.watch(activeBabyProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Timeline')),
       body: active == null
           ? const Center(child: Text('Add a baby in Settings first.'))
-          : _Timeline(babyId: active.id),
+          : _body(active.id),
+    );
+  }
+
+  Widget _body(String babyId) {
+    final events = ref.watch(eventsProvider(babyId));
+    return events.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Could not load the timeline: $e')),
+      data: (all) {
+        final types = {for (final e in all) e.type}.toList()..sort();
+        final filtered = all
+            .where((e) => _type == null || e.type == _type)
+            .where((e) => _day == null || _sameDay(e.time, _day!))
+            .toList();
+        return Column(
+          children: [
+            _FilterBar(
+              types: types,
+              type: _type,
+              day: _day,
+              onType: (t) => setState(() => _type = t),
+              onPickDay: _pickDay,
+              onClearDay: () => setState(() => _day = null),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(eventsProvider(babyId));
+                  await ref.read(eventsProvider(babyId).future);
+                },
+                child: filtered.isEmpty
+                    ? _Scrollable(
+                        child: Text(all.isEmpty
+                            ? 'No events yet. Log something in the Log tab.'
+                            : 'No events match this filter.'),
+                      )
+                    : _EventList(filtered),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _Timeline extends ConsumerWidget {
-  const _Timeline({required this.babyId});
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.types,
+    required this.type,
+    required this.day,
+    required this.onType,
+    required this.onPickDay,
+    required this.onClearDay,
+  });
 
-  final String babyId;
+  final List<String> types;
+  final String? type;
+  final DateTime? day;
+  final ValueChanged<String?> onType;
+  final VoidCallback onPickDay;
+  final VoidCallback onClearDay;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final events = ref.watch(eventsProvider(babyId));
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(eventsProvider(babyId));
-        await ref.read(eventsProvider(babyId).future);
-      },
-      child: events.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _Scrollable(
-          child: Text('Could not load the timeline: $e'),
-        ),
-        data: (list) => list.isEmpty
-            ? const _Scrollable(
-                child: Text('No events yet. Log something in the Log tab.'),
-              )
-            : _EventList(list),
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: InputChip(
+              avatar: const Icon(Icons.event_outlined, size: 18),
+              label: Text(day == null ? 'Any date' : formatDate(day!)),
+              onPressed: onPickDay,
+              onDeleted: day == null ? null : onClearDay,
+            ),
+          ),
+          _chip(context, 'All', type == null, () => onType(null)),
+          for (final t in types)
+            _chip(context, _cap(t), type == t, () => onType(t)),
+        ],
       ),
     );
   }
+
+  Widget _chip(BuildContext context, String label, bool selected, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+      ),
+    );
+  }
+
+  String _cap(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }
 
 class _EventList extends StatelessWidget {
@@ -90,7 +184,6 @@ class _EventList extends StatelessWidget {
   }
 }
 
-/// A scrollable wrapper so short states still trigger pull-to-refresh.
 class _Scrollable extends StatelessWidget {
   const _Scrollable({required this.child});
 
