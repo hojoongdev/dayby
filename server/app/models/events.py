@@ -63,6 +63,13 @@ class IngestTextRequest(BaseModel):
     now: Optional[datetime] = None
 
 
+class IngestVoiceResponse(BaseModel):
+    """Voice ingest: what the STT heard plus the structured result."""
+
+    transcript: str
+    result: StructuredResult
+
+
 class EventCreate(BaseModel):
     """A confirmed event to persist (after the user reviews the ingest result)."""
 
