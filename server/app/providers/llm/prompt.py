@@ -9,11 +9,13 @@ from ...models.events import STANDARD_EVENT_TYPES, LlmContext
 
 def build_system_instruction(ctx: LlmContext) -> str:
     babies = ", ".join(ctx.baby_names) if ctx.baby_names else "(none registered)"
+    profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
     types_ = ", ".join(STANDARD_EVENT_TYPES)
     return f"""You extract a structured baby-care log entry from a short caregiver utterance.
 
 Current time (ISO 8601, the caller's local time with UTC offset): {ctx.now.isoformat()}
 Known baby names/nicknames: {babies}
+Baby profiles (name, age, sex): {profiles}
 Standard event types: {types_}
 
 Return ONLY a JSON object with this exact shape:
@@ -58,6 +60,8 @@ Rules:
 - The known baby names/nicknames above are the ground truth. If the utterance has a close phonetic
   variant (a speech-to-text mishearing of a similar-sounding name), correct it to the registered
   name and set baby_ref to that name.
+- Fix obvious speech-to-text errors from context: a feeding amount heard as "120 mm" means "120 ml"
+  (amount_ml: 120). Pick the unit that makes sense for the event type.
 - If the family has more than one baby and the utterance does not say which one, set
   needs_clarification and leave baby_ref null.
 - Do not diagnose or give medical advice.

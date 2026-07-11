@@ -3,6 +3,7 @@
 Both endpoints return a confirmation payload; nothing is saved until the user
 confirms and posts to /events.
 """
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -29,6 +30,35 @@ async def _baby_names(family: dict) -> list[str]:
         names.append(baby["name"])
         names.extend(baby.get("nicknames", []))
     return names
+
+
+def _age_label(birthdate_iso, ref: date) -> str | None:
+    try:
+        bd = date.fromisoformat(birthdate_iso)
+    except (ValueError, TypeError):
+        return None
+    months = (ref.year - bd.year) * 12 + (ref.month - bd.month)
+    if ref.day < bd.day:
+        months -= 1
+    if months < 1:
+        return f"{(ref - bd).days} days old"
+    if months < 24:
+        return f"{months} months old"
+    return f"{months // 12} years old"
+
+
+async def _baby_profiles(family: dict, ref: date) -> list[str]:
+    """Name + age + sex per baby, so the model can answer and tip by age."""
+    out: list[str] = []
+    async for baby in get_db().babies.find({"family_id": family["_id"]}):
+        details = []
+        age = _age_label(baby.get("birthdate"), ref)
+        if age:
+            details.append(age)
+        if baby.get("sex"):
+            details.append(baby["sex"])
+        out.append(baby["name"] + (f" ({', '.join(details)})" if details else ""))
+    return out
 
 
 async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
@@ -62,9 +92,11 @@ async def ingest_text(
     req: IngestTextRequest,
     family: dict = Depends(get_current_family),
 ) -> StructuredResult:
+    now_dt = req.now or now()
     ctx = LlmContext(
-        now=req.now or now(),
+        now=now_dt,
         baby_names=await _baby_names(family),
+        baby_profiles=await _baby_profiles(family, now_dt.date()),
         lang=req.lang,
     )
     result = await get_llm_provider().structure_log(req.text, ctx)
@@ -87,7 +119,13 @@ async def ingest_voice(
     if not audio:
         raise HTTPException(status_code=400, detail="Empty audio body")
     transcript = await get_stt_provider().transcribe(audio, lang)
-    ctx = LlmContext(now=now(), baby_names=await _baby_names(family), lang=lang)
+    now_dt = now()
+    ctx = LlmContext(
+        now=now_dt,
+        baby_names=await _baby_names(family),
+        baby_profiles=await _baby_profiles(family, now_dt.date()),
+        lang=lang,
+    )
     result = await get_llm_provider().structure_log(transcript, ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     return IngestVoiceResponse(transcript=transcript, result=result)

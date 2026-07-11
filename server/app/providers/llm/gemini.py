@@ -65,7 +65,8 @@ class GeminiLLMProvider(LLMProvider):
             "Event times are UTC; when you mention a time, convert it to the caller's local "
             "timezone (the offset in the current local time below) and state it naturally. "
             "Do not diagnose; for health concerns, gently suggest consulting a pediatrician.\n"
-            f"Current local time (with offset): {ctx.now.isoformat()}"
+            f"Current local time (with offset): {ctx.now.isoformat()}\n"
+            f"Baby profiles: {'; '.join(ctx.baby_profiles) if ctx.baby_profiles else 'none'}"
         )
         context = json.dumps(events, ensure_ascii=False, default=str)
         try:
