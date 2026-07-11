@@ -155,6 +155,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       if (!mounted) return;
       setState(() {
         _thinking = false;
+        if (result.settings != null && result.settings!.isNotEmpty) {
+          _applySettings(result.settings!);
+        }
         final reply = result.reply;
         if (reply != null && reply.isNotEmpty) {
           _history.add(_Msg(fromUser: false, text: reply));
@@ -178,6 +181,15 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       });
       _scrollToBottom();
     }
+  }
+
+  void _applySettings(Map<String, dynamic> s) {
+    ref.read(unitPrefsProvider.notifier).set(
+          temp: s['temp'] as String?,
+          weight: s['weight'] as String?,
+          length: s['length'] as String?,
+          volume: s['volume'] as String?,
+        );
   }
 
   String _fallback(StructuredResult r) {

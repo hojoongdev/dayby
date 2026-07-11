@@ -36,6 +36,7 @@ Return ONLY a JSON object with this exact shape:
   "query_text": "<for action=query: the original question, else null>",
   "needs_clarification": "<a question to ask if the utterance is ambiguous, else null>",
   "reply": "<one short, warm spoken sentence in the SAME language as the utterance: read back what you understood and offer to save it; for a question, a brief answer or follow-up>",
+  "settings": <null, or an object of changed settings; for units use keys temp (c|f), weight (kg|g|lb), length (cm|m|in), volume (ml|oz)>,
   "lang": "<ISO language code of the utterance, e.g. ko or en>"
 }}
 
@@ -43,6 +44,9 @@ Rules:
 - The utterance may be in ANY language (English, Korean, ...). Detect it and set "lang".
   Keep "note" and "reply" in the original language (Korean stays Korean); "reply" is one warm sentence.
 - A question ("when was the last feeding?") is action=query with an empty events list.
+- If the caregiver asks to change a unit/setting ("use Fahrenheit", "log feeds in ounces",
+  "무게는 파운드로 보여줘"), set "settings" with the changed keys and leave events empty. Still write a
+  "reply" confirming the change.
 - Resolve relative and clock times ("last night", "8am", "two hours ago") against the current
   local time above, in that same timezone. Return "time" as ISO 8601 (with the offset, or UTC "Z").
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,

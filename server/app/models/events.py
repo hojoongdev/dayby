@@ -48,6 +48,9 @@ class StructuredResult(BaseModel):
     # A short, friendly spoken confirmation in the caller's own language, for the
     # app to speak (TTS) and show in the chat. Never hardcoded — the model writes it.
     reply: Optional[str] = None
+    # A settings change requested by voice, e.g. {"temp": "f", "volume": "oz"}.
+    # When present, the app applies it instead of saving an event.
+    settings: Optional[dict[str, Any]] = None
     lang: str = "ko"
 
 
