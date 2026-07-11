@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/api_client.dart';
 import '../format.dart';
+import '../models/family.dart';
 import '../providers.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -33,12 +35,19 @@ class SettingsScreen extends ConsumerWidget {
                   ListTile(
                     leading: const Icon(Icons.child_care_outlined),
                     title: Text(b.name),
-                    subtitle: b.birthdate == null
-                        ? null
-                        : Text('Born ${formatDate(b.birthdate!)}'),
-                    trailing: b.id == activeId
-                        ? Icon(Icons.check, color: scheme.primary)
-                        : null,
+                    subtitle: Text(_babySubtitle(b)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (b.id == activeId)
+                          Icon(Icons.check, color: scheme.primary),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          tooltip: 'Edit',
+                          onPressed: () => _babyForm(context, ref, baby: b),
+                        ),
+                      ],
+                    ),
                     selected: b.id == activeId,
                     onTap: () =>
                         ref.read(selectedBabyIdProvider.notifier).set(b.id),
@@ -49,7 +58,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.add),
             title: const Text('Add a baby'),
-            onTap: () => _addBaby(context, ref),
+            onTap: () => _babyForm(context, ref),
           ),
           const Divider(height: 32),
           ListTile(
@@ -63,15 +72,25 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _addBaby(BuildContext context, WidgetRef ref) async {
+  String _babySubtitle(Baby b) {
+    final parts = <String>[];
+    if (b.sex == 'female') parts.add('Girl');
+    if (b.sex == 'male') parts.add('Boy');
+    if (b.birthdate != null) parts.add(formatAge(b.birthdate!));
+    return parts.isEmpty ? 'Tap edit to add details' : parts.join(' · ');
+  }
+
+  Future<void> _babyForm(BuildContext context, WidgetRef ref, {Baby? baby}) async {
     final messenger = ScaffoldMessenger.of(context);
-    final added = await showModalBottomSheet<bool>(
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _AddBabySheet(),
+      builder: (_) => _BabyFormSheet(baby: baby),
     );
-    if (added == true) {
-      messenger.showSnackBar(const SnackBar(content: Text('Baby added')));
+    if (saved == true) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(baby == null ? 'Baby added' : 'Baby updated'),
+      ));
     }
   }
 
@@ -173,18 +192,22 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _AddBabySheet extends ConsumerStatefulWidget {
-  const _AddBabySheet();
+class _BabyFormSheet extends ConsumerStatefulWidget {
+  const _BabyFormSheet({this.baby});
+
+  final Baby? baby;
 
   @override
-  ConsumerState<_AddBabySheet> createState() => _AddBabySheetState();
+  ConsumerState<_BabyFormSheet> createState() => _BabyFormSheetState();
 }
 
-class _AddBabySheetState extends ConsumerState<_AddBabySheet> {
-  final _name = TextEditingController();
-  String? _sex;
-  DateTime? _birthdate;
+class _BabyFormSheetState extends ConsumerState<_BabyFormSheet> {
+  late final _name = TextEditingController(text: widget.baby?.name ?? '');
+  late String? _sex = widget.baby?.sex;
+  late DateTime? _birthdate = widget.baby?.birthdate;
   bool _saving = false;
+
+  bool get _isEdit => widget.baby != null;
 
   @override
   void dispose() {
@@ -208,20 +231,23 @@ class _AddBabySheetState extends ConsumerState<_AddBabySheet> {
     if (name.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final api = ref.read(apiClientProvider);
     setState(() => _saving = true);
     try {
-      final baby = await ref.read(apiClientProvider).addBaby(
-            name: name,
-            sex: _sex,
-            birthdate: _birthdate,
-          );
+      if (_isEdit) {
+        await api.updateBaby(widget.baby!.id,
+            name: name, sex: _sex, birthdate: _birthdate);
+      } else {
+        final baby =
+            await api.addBaby(name: name, sex: _sex, birthdate: _birthdate);
+        await ref.read(selectedBabyIdProvider.notifier).set(baby.id);
+      }
       ref.invalidate(babiesProvider);
-      await ref.read(selectedBabyIdProvider.notifier).set(baby.id);
       navigator.pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      messenger.showSnackBar(SnackBar(content: Text('Could not add: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -229,16 +255,17 @@ class _AddBabySheetState extends ConsumerState<_AddBabySheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Add a baby', style: Theme.of(context).textTheme.titleLarge),
+          Text(_isEdit ? 'Edit baby' : 'Add a baby',
+              style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
           TextField(
             controller: _name,
-            autofocus: true,
+            autofocus: !_isEdit,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Name'),
           ),
@@ -272,7 +299,7 @@ class _AddBabySheetState extends ConsumerState<_AddBabySheet> {
                     width: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Add'),
+                : Text(_isEdit ? 'Save' : 'Add'),
           ),
         ],
       ),

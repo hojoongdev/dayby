@@ -47,6 +47,22 @@ class ApiClient {
         .toList();
   }
 
+  Future<Baby> updateBaby(
+    String id, {
+    String? name,
+    List<String>? nicknames,
+    DateTime? birthdate,
+    String? sex,
+  }) async {
+    final res = await _dio.patch('/babies/$id', data: {
+      'name': ?name,
+      'nicknames': ?nicknames,
+      'birthdate': ?_dateOnly(birthdate),
+      'sex': ?sex,
+    });
+    return Baby.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<StructuredResult> ingestText(String text, {String? lang}) async {
     final res = await _dio.post('/ingest/text',
         data: {'text': text, 'lang': ?lang, 'now': _localNowIso()});

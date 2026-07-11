@@ -1,9 +1,9 @@
 """Family and baby management. All baby routes are scoped to the caller's family."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..db import get_db
 from ..deps import get_current_family
-from ..models.family import BabyCreate, BabyOut, FamilyCreate, FamilyOut
+from ..models.family import BabyCreate, BabyOut, BabyUpdate, FamilyCreate, FamilyOut
 from ..util import invite_code, new_id, now
 
 router = APIRouter(tags=["families"])
@@ -50,3 +50,29 @@ async def add_baby(body: BabyCreate, family: dict = Depends(get_current_family))
 @router.get("/babies", response_model=list[BabyOut])
 async def list_babies(family: dict = Depends(get_current_family)) -> list[BabyOut]:
     return [_baby_out(doc) async for doc in get_db().babies.find({"family_id": family["_id"]})]
+
+
+@router.patch("/babies/{baby_id}", response_model=BabyOut)
+async def update_baby(
+    baby_id: str,
+    body: BabyUpdate,
+    family: dict = Depends(get_current_family),
+) -> BabyOut:
+    baby = await get_db().babies.find_one({"_id": baby_id, "family_id": family["_id"]})
+    if baby is None:
+        raise HTTPException(status_code=404, detail="Baby not found in this family")
+
+    updates: dict = {}
+    if body.name is not None:
+        updates["name"] = body.name
+    if body.nicknames is not None:
+        updates["nicknames"] = body.nicknames
+    if body.birthdate is not None:
+        updates["birthdate"] = body.birthdate.isoformat()
+    if body.sex is not None:
+        updates["sex"] = body.sex
+
+    if updates:
+        await get_db().babies.update_one({"_id": baby_id}, {"$set": updates})
+        baby.update(updates)
+    return _baby_out(baby)

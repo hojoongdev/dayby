@@ -22,6 +22,15 @@ class BabyCreate(BaseModel):
     sex: Optional[str] = None
 
 
+class BabyUpdate(BaseModel):
+    """Partial update; only the provided fields change."""
+
+    name: Optional[str] = None
+    nicknames: Optional[list[str]] = None
+    birthdate: Optional[date] = None
+    sex: Optional[str] = None
+
+
 class BabyOut(BaseModel):
     id: str
     family_id: str
