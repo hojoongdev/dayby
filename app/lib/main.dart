@@ -1,14 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const DaybyApp());
+import 'providers.dart';
+import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  runApp(
+    ProviderScope(
+      overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+      child: const DaybyApp(),
+    ),
+  );
 }
 
-class DaybyApp extends StatelessWidget {
+class DaybyApp extends ConsumerWidget {
   const DaybyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final familyId = ref.watch(familyIdProvider);
     return MaterialApp(
       title: 'Dayby',
       debugShowCheckedModeBanner: false,
@@ -16,19 +30,7 @@ class DaybyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6C8EBF)),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
-    );
-  }
-}
-
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dayby')),
-      body: const Center(child: Text('Dayby')),
+      home: familyId == null ? const OnboardingScreen() : const HomeScreen(),
     );
   }
 }
