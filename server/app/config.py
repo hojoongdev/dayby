@@ -26,5 +26,9 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
 
+    # CORS: comma-separated browser origins allowed to call the API
+    # (the Flutter web client). "*" is fine for local dev; lock this down in prod.
+    cors_allow_origins: str = "*"
+
 
 settings = Settings()
