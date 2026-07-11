@@ -6,6 +6,8 @@ import 'models/event.dart';
 import 'models/family.dart';
 
 const familyIdKey = 'family_id';
+const familyNameKey = 'family_name';
+const inviteCodeKey = 'invite_code';
 const selectedBabyIdKey = 'selected_baby_id';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -25,10 +27,26 @@ class FamilyIdNotifier extends Notifier<String?> {
     await ref.read(sharedPrefsProvider).setString(familyIdKey, id);
     state = id;
   }
+
+  Future<void> clear() async {
+    await ref.read(sharedPrefsProvider).remove(familyIdKey);
+    state = null;
+  }
 }
 
 final familyIdProvider =
     NotifierProvider<FamilyIdNotifier, String?>(FamilyIdNotifier.new);
+
+/// The current family's name and invite code, persisted at onboarding.
+final familyProvider = Provider<({String name, String code})?>((ref) {
+  final id = ref.watch(familyIdProvider);
+  if (id == null) return null;
+  final prefs = ref.watch(sharedPrefsProvider);
+  return (
+    name: prefs.getString(familyNameKey) ?? 'Your family',
+    code: prefs.getString(inviteCodeKey) ?? '',
+  );
+});
 
 final babiesProvider = FutureProvider<List<Baby>>(
   (ref) => ref.watch(apiClientProvider).listBabies(),

@@ -32,7 +32,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final api = ref.read(apiClientProvider);
       final family = await api.createFamily(familyName);
       api.setFamilyId(family.id);
-      await api.addBaby(name: babyName);
+      final baby = await api.addBaby(name: babyName);
+      final prefs = ref.read(sharedPrefsProvider);
+      await prefs.setString(familyNameKey, family.name);
+      await prefs.setString(inviteCodeKey, family.inviteCode);
+      await ref.read(selectedBabyIdProvider.notifier).set(baby.id);
       await ref.read(familyIdProvider.notifier).set(family.id);
     } catch (e) {
       if (!mounted) return;

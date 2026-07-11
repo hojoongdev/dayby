@@ -19,6 +19,12 @@ String formatClock(DateTime t) {
   return '${_two(l.hour)}:${_two(l.minute)}';
 }
 
+/// "Jul 11, 2026"
+String formatDate(DateTime t) {
+  final l = t.toLocal();
+  return '${_months[l.month - 1]} ${l.day}, ${l.year}';
+}
+
 /// "amount_ml" -> "amount ml"
 String prettifyKey(String key) => key.replaceAll('_', ' ');
 
