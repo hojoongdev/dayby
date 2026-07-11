@@ -7,6 +7,7 @@ import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
 import '../providers.dart';
+import '../tts.dart';
 import '../widgets/confirm_card.dart';
 import '../widgets/glass.dart';
 
@@ -38,8 +39,10 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   final SpeechToText _speech = SpeechToText();
+  final Tts _tts = Tts();
   bool _speechAvailable = false;
   bool _listening = false;
+  bool _muted = false;
 
   final List<_Msg> _history = [];
   StructuredResult? _pending;
@@ -56,6 +59,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   @override
   void dispose() {
     if (_listening) _speech.cancel();
+    _tts.stop();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -146,6 +150,10 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           _history.add(_Msg(fromUser: false, text: _fallback(result)));
         }
       });
+      final reply = result.reply;
+      if (!_muted && reply != null && reply.isNotEmpty) {
+        _tts.speak(reply, lang: result.lang);
+      }
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
@@ -237,6 +245,14 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         title: const Text('Dayby'),
         backgroundColor: Colors.transparent,
         actions: [
+          IconButton(
+            tooltip: _muted ? 'Unmute' : 'Mute',
+            onPressed: () {
+              if (!_muted) _tts.stop();
+              setState(() => _muted = !_muted);
+            },
+            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+          ),
           if (_speechAvailable)
             TextButton(
               onPressed: () => ref
