@@ -46,6 +46,10 @@ Rules:
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,
   temperature -> celsius, pumping -> amount_ml, growth -> weight_kg and/or height_cm. Use
   subtype for sleep (start/end) and diaper (wet/dirty/mixed).
+- Route intent by type: a shopping/reminder ("buy diapers", "diaper size 5 next month") is
+  type "todo" with fields.item (and fields.due if a date is mentioned). An appointment ("doctor
+  visit Aug 3, 11am") is type "appointment" with the appointment time in "time" and fields.title
+  (plus fields.location if given). A pure question stays action=query with empty events.
 - If the family has more than one baby and the utterance does not say which one, set
   needs_clarification and leave baby_ref null.
 - Do not diagnose or give medical advice.

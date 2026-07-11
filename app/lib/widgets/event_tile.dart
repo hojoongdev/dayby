@@ -29,6 +29,8 @@ IconData _iconFor(String type) => switch (type) {
       'pumping' => Icons.water_drop_outlined,
       'growth' => Icons.straighten_outlined,
       'milestone' => Icons.emoji_events_outlined,
+      'todo' => Icons.checklist_outlined,
+      'appointment' => Icons.event_available_outlined,
       'memo' => Icons.sticky_note_2_outlined,
       _ => Icons.event_note_outlined,
     };

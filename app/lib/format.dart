@@ -41,6 +41,9 @@ String eventSummary(String type, String? subtype, Map<String, dynamic> fields) {
       'amount_oz' => '$value oz',
       'celsius' => '$value°C',
       'duration_min' => '$value min',
+      'weight_kg' => '$value kg',
+      'height_cm' => '$value cm',
+      'item' || 'title' => '$value',
       _ => '${prettifyKey(key)} $value',
     });
   });

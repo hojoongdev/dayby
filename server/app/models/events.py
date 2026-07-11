@@ -23,7 +23,7 @@ class Confidence(str, Enum):
 # outside this list is still valid (stored as-is with type "other" or a custom type).
 STANDARD_EVENT_TYPES = (
     "feeding", "sleep", "diaper", "bath", "medicine", "temperature",
-    "pumping", "growth", "milestone", "memo", "other",
+    "pumping", "growth", "milestone", "todo", "appointment", "memo", "other",
 )
 
 
