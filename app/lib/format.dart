@@ -1,3 +1,5 @@
+import 'units.dart';
+
 /// Small display helpers. The server stores times in UTC; everything here
 /// renders in the device's local time zone.
 String _two(int n) => n.toString().padLeft(2, '0');
@@ -57,22 +59,13 @@ String prettifyKey(String key) => key.replaceAll('_', ' ');
 String _capitalize(String s) =>
     s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 
-/// A one-line human summary, e.g. "Feeding · formula · 120 ml".
-String eventSummary(String type, String? subtype, Map<String, dynamic> fields) {
+/// A one-line human summary, e.g. "Feeding · formula · 120 ml", with fields
+/// converted to the caregiver's preferred units.
+String eventSummary(String type, String? subtype, Map<String, dynamic> fields,
+    {UnitPrefs units = const UnitPrefs()}) {
   final parts = <String>[_capitalize(type)];
   if (subtype != null && subtype.isNotEmpty) parts.add(subtype);
-  fields.forEach((key, value) {
-    parts.add(switch (key) {
-      'amount_ml' => '$value ml',
-      'amount_oz' => '$value oz',
-      'celsius' => '$value°C',
-      'duration_min' => '$value min',
-      'weight_kg' => '$value kg',
-      'height_cm' => '$value cm',
-      'item' || 'title' => '$value',
-      _ => '${prettifyKey(key)} $value',
-    });
-  });
+  fields.forEach((key, value) => parts.add(formatField(key, value, units)));
   return parts.join(' · ');
 }
 

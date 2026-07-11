@@ -60,6 +60,8 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Add a baby'),
             onTap: () => _babyForm(context, ref),
           ),
+          const _SectionHeader('Units'),
+          const _UnitsSection(),
           const Divider(height: 32),
           ListTile(
             leading: Icon(Icons.logout, color: scheme.error),
@@ -169,6 +171,45 @@ class _FamilyCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _UnitsSection extends ConsumerWidget {
+  const _UnitsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final u = ref.watch(unitPrefsProvider);
+    final n = ref.read(unitPrefsProvider.notifier);
+    return Column(
+      children: [
+        _tile('Temperature', u.temp, const {'c': '°C', 'f': '°F'},
+            (v) => n.set(temp: v)),
+        _tile('Weight', u.weight, const {'kg': 'kg', 'g': 'g', 'lb': 'lb'},
+            (v) => n.set(weight: v)),
+        _tile('Length', u.length, const {'cm': 'cm', 'm': 'm', 'in': 'inch'},
+            (v) => n.set(length: v)),
+        _tile('Feeding volume', u.volume, const {'ml': 'ml', 'oz': 'oz'},
+            (v) => n.set(volume: v)),
+      ],
+    );
+  }
+
+  Widget _tile(String label, String value, Map<String, String> options,
+      ValueChanged<String> onChanged) {
+    return ListTile(
+      title: Text(label),
+      trailing: DropdownButton<String>(
+        value: value,
+        items: [
+          for (final e in options.entries)
+            DropdownMenuItem(value: e.key, child: Text(e.value)),
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
       ),
     );
   }

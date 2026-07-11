@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../format.dart';
 import '../models/event.dart';
+import '../providers.dart';
 
-class EventTile extends StatelessWidget {
+class EventTile extends ConsumerWidget {
   const EventTile(this.event, {super.key});
 
   final Event event;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final units = ref.watch(unitPrefsProvider);
     return ListTile(
       leading: CircleAvatar(child: Icon(_iconFor(event.type))),
-      title: Text(eventSummary(event.type, event.subtype, event.fields)),
+      title: Text(eventSummary(event.type, event.subtype, event.fields, units: units)),
       subtitle: event.note == null ? null : Text(event.note!),
       trailing: Text(formatClock(event.time)),
     );

@@ -210,13 +210,14 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   }
 
   void _afterSave(Event saved) {
+    final units = ref.read(unitPrefsProvider);
     ref.invalidate(eventsProvider(saved.babyId));
     setState(() {
       _saving = false;
       _pending = null;
       _history.add(_Msg(
         fromUser: false,
-        text: eventSummary(saved.type, saved.subtype, saved.fields),
+        text: eventSummary(saved.type, saved.subtype, saved.fields, units: units),
         subtitle: 'Saved to the timeline',
         saved: true,
       ));
@@ -382,6 +383,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   Widget _confirmCard(StructuredEvent e, Baby active, List<Baby> babies) {
     final theme = Theme.of(context);
+    final units = ref.watch(unitPrefsProvider);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -391,7 +393,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(eventSummary(e.type, e.subtype, e.fields),
+              Text(eventSummary(e.type, e.subtype, e.fields, units: units),
                   style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(formatTime(e.time ?? DateTime.now()),

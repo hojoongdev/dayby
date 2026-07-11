@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api/api_client.dart';
 import 'models/event.dart';
 import 'models/family.dart';
+import 'units.dart';
 
 const familyIdKey = 'family_id';
 const familyNameKey = 'family_name';
@@ -94,3 +95,29 @@ class VoiceLangNotifier extends Notifier<String> {
 
 final voiceLangProvider =
     NotifierProvider<VoiceLangNotifier, String>(VoiceLangNotifier.new);
+
+/// The caregiver's preferred display units, persisted.
+class UnitPrefsNotifier extends Notifier<UnitPrefs> {
+  @override
+  UnitPrefs build() {
+    final p = ref.watch(sharedPrefsProvider);
+    return UnitPrefs(
+      temp: p.getString('unit_temp') ?? 'c',
+      weight: p.getString('unit_weight') ?? 'kg',
+      length: p.getString('unit_length') ?? 'cm',
+      volume: p.getString('unit_volume') ?? 'ml',
+    );
+  }
+
+  Future<void> set({String? temp, String? weight, String? length, String? volume}) async {
+    final p = ref.read(sharedPrefsProvider);
+    if (temp != null) await p.setString('unit_temp', temp);
+    if (weight != null) await p.setString('unit_weight', weight);
+    if (length != null) await p.setString('unit_length', length);
+    if (volume != null) await p.setString('unit_volume', volume);
+    state = state.copyWith(temp: temp, weight: weight, length: length, volume: volume);
+  }
+}
+
+final unitPrefsProvider =
+    NotifierProvider<UnitPrefsNotifier, UnitPrefs>(UnitPrefsNotifier.new);

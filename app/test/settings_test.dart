@@ -53,6 +53,9 @@ void main() {
     expect(find.text('a1b2c3'), findsOneWidget);
     expect(find.text('Ari'), findsOneWidget);
 
+    // Reset is below the fold now (units section) — scroll it into view.
+    await tester.drag(find.text('Ari'), const Offset(0, -600));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Reset app'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Reset'));

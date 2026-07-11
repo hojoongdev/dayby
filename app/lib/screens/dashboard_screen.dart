@@ -130,7 +130,7 @@ class _Dashboard extends ConsumerWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
+class _StatCard extends ConsumerWidget {
   const _StatCard({required this.icon, required this.label, this.event});
 
   final IconData icon;
@@ -138,8 +138,9 @@ class _StatCard extends StatelessWidget {
   final Event? event;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final units = ref.watch(unitPrefsProvider);
     return GlassCard(
       margin: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -163,7 +164,8 @@ class _StatCard extends StatelessWidget {
                   Text(formatAgo(event!.time),
                       style: theme.textTheme.titleMedium),
                   Text(
-                    eventSummary(event!.type, event!.subtype, event!.fields),
+                    eventSummary(event!.type, event!.subtype, event!.fields,
+                        units: units),
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
