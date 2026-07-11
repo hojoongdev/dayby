@@ -38,10 +38,21 @@ class MockLLMProvider(LLMProvider):
 
         # A question is a query, not a new record.
         if any(hint in lower for hint in _QUESTION_HINTS):
-            return StructuredResult(action=Action.query, query_text=text, lang=lang)
+            return StructuredResult(
+                action=Action.query,
+                query_text=text,
+                reply="I can't answer questions yet.",
+                lang=lang,
+            )
 
         event = self._classify(text, lower, ctx.now)
-        return StructuredResult(action=Action.create, events=[event], lang=lang)
+        readback = event.type if not event.subtype else f"{event.type} ({event.subtype})"
+        return StructuredResult(
+            action=Action.create,
+            events=[event],
+            reply=f"Got it: {readback}. Save it?",
+            lang=lang,
+        )
 
     def _classify(self, text: str, lower: str, now: datetime) -> StructuredEvent:
         number = _first_number(lower)

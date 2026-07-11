@@ -45,6 +45,9 @@ class StructuredResult(BaseModel):
     target_hint: Optional[str] = None
     query_text: Optional[str] = None
     needs_clarification: Optional[str] = None
+    # A short, friendly spoken confirmation in the caller's own language, for the
+    # app to speak (TTS) and show in the chat. Never hardcoded — the model writes it.
+    reply: Optional[str] = None
     lang: str = "ko"
 
 

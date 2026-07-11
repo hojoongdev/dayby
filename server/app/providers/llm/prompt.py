@@ -33,18 +33,19 @@ Return ONLY a JSON object with this exact shape:
   "target_hint": "<for update/delete: how to find the target record, else null>",
   "query_text": "<for action=query: the original question, else null>",
   "needs_clarification": "<a question to ask if the utterance is ambiguous, else null>",
+  "reply": "<one short, warm spoken sentence in the SAME language as the utterance: read back what you understood and offer to save it; for a question, a brief answer or follow-up>",
   "lang": "<ISO language code of the utterance, e.g. ko or en>"
 }}
 
 Rules:
 - The utterance may be in ANY language (English, Korean, ...). Detect it and set "lang".
-  Keep "note" in the original language.
+  Keep "note" and "reply" in the original language (Korean stays Korean); "reply" is one warm sentence.
 - A question ("when was the last feeding?") is action=query with an empty events list.
 - Resolve relative and clock times ("last night", "8am", "two hours ago") against the current
   local time above, in that same timezone. Return "time" as ISO 8601 (with the offset, or UTC "Z").
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,
-  temperature -> celsius, pumping -> amount_ml. Use subtype for sleep (start/end) and
-  diaper (wet/dirty/mixed).
+  temperature -> celsius, pumping -> amount_ml, growth -> weight_kg and/or height_cm. Use
+  subtype for sleep (start/end) and diaper (wet/dirty/mixed).
 - If the family has more than one baby and the utterance does not say which one, set
   needs_clarification and leave baby_ref null.
 - Do not diagnose or give medical advice.
