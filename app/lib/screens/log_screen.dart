@@ -42,6 +42,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   final Tts _tts = Tts();
   bool _speechAvailable = false;
   bool _listening = false;
+  bool _voiceArmed = false;
   bool _muted = false;
 
   final List<_Msg> _history = [];
@@ -69,9 +70,15 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     try {
       final available = await _speech.initialize(
         onStatus: (s) {
-          if (mounted && s != 'listening') setState(() => _listening = false);
+          if (!mounted || s == 'listening') return;
+          if (_voiceArmed) {
+            _finishVoice(); // pause/timeout -> auto-send, no button needed
+          } else if (_listening) {
+            setState(() => _listening = false);
+          }
         },
         onError: (_) {
+          _voiceArmed = false;
           if (mounted) setState(() => _listening = false);
         },
       );
@@ -96,10 +103,11 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   Future<void> _toggleMic() async {
     if (_listening) {
       await _speech.stop();
-      if (mounted) setState(() => _listening = false);
+      _finishVoice();
       return;
     }
     final lang = ref.read(voiceLangProvider);
+    _voiceArmed = true;
     setState(() => _listening = true);
     await _speech.listen(
       onResult: (result) {
@@ -108,18 +116,25 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           _input.selection =
               TextSelection.collapsed(offset: _input.text.length);
         });
-        if (result.finalResult && _input.text.trim().isNotEmpty) {
-          setState(() => _listening = false);
-          _submit();
-        }
+        if (result.finalResult) _finishVoice();
       },
       listenOptions: SpeechListenOptions(
         partialResults: true,
         localeId: lang == 'ko' ? 'ko-KR' : 'en-US',
         listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
+        pauseFor: const Duration(seconds: 2),
       ),
     );
+  }
+
+  /// End the voice session and auto-send whatever was heard — so the caregiver
+  /// never has to reach for the send button.
+  void _finishVoice() {
+    if (!_voiceArmed || !mounted) return;
+    _voiceArmed = false;
+    final hasText = _input.text.trim().isNotEmpty;
+    setState(() => _listening = false);
+    if (hasText) _submit();
   }
 
   Future<void> _submit() async {
