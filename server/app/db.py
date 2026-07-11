@@ -4,6 +4,8 @@ The client is created lazily and reset on shutdown so it always binds to the
 running event loop. This keeps it correct both under the app's lifespan and under
 tests that spin up a fresh event loop per TestClient.
 """
+from datetime import timezone
+
 from pymongo import AsyncMongoClient
 
 from .config import settings
@@ -15,8 +17,15 @@ def get_client() -> AsyncMongoClient:
     global _client
     if _client is None:
         # serverSelectionTimeoutMS keeps health checks and startup from hanging
-        # when the database is unreachable (default is 30s).
-        _client = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=3000)
+        # when the database is unreachable (default is 30s). tz_aware makes reads
+        # return timezone-aware UTC datetimes, so the API always serializes times
+        # with an offset (clients store UTC, display local).
+        _client = AsyncMongoClient(
+            settings.mongodb_uri,
+            serverSelectionTimeoutMS=3000,
+            tz_aware=True,
+            tzinfo=timezone.utc,
+        )
     return _client
 
 
