@@ -72,6 +72,7 @@ class StructuredResult {
     this.babyRef,
     this.events = const [],
     this.needsClarification,
+    this.reply,
     this.lang = 'ko',
   });
 
@@ -79,6 +80,9 @@ class StructuredResult {
   final String? babyRef;
   final List<StructuredEvent> events;
   final String? needsClarification;
+
+  /// A short spoken confirmation the model wrote in the caller's language.
+  final String? reply;
   final String lang;
 
   factory StructuredResult.fromJson(Map<String, dynamic> json) =>
@@ -89,6 +93,7 @@ class StructuredResult {
             .map((e) => StructuredEvent.fromJson(e as Map<String, dynamic>))
             .toList(),
         needsClarification: json['needs_clarification'] as String?,
+        reply: json['reply'] as String?,
         lang: json['lang'] as String? ?? 'ko',
       );
 }

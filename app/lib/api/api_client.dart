@@ -108,3 +108,23 @@ class ApiClient {
     return '${now.toIso8601String()}$sign$hh:$mm';
   }
 }
+
+/// Turn any request failure into a short, human message for the UI.
+String friendlyError(Object e) {
+  if (e is DioException) {
+    final data = e.response?.data;
+    if (data is Map && data['detail'] != null) return data['detail'].toString();
+    switch (e.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return 'Cannot reach the server. Check your connection and try again.';
+      case DioExceptionType.badResponse:
+        return 'The server had a problem (${e.response?.statusCode}). Please try again.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+  return 'Something went wrong. Please try again.';
+}

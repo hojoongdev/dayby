@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../api/api_client.dart';
 import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
@@ -9,14 +10,21 @@ import '../providers.dart';
 import '../widgets/confirm_card.dart';
 import '../widgets/glass.dart';
 
-/// One line in the conversation: the app's confirmation or acknowledgement.
-/// The caregiver's own words are intentionally not echoed back.
+/// One turn in the conversation.
 class _Msg {
-  const _Msg({required this.title, this.subtitle, this.saved = false});
+  const _Msg({
+    required this.fromUser,
+    required this.text,
+    this.subtitle,
+    this.saved = false,
+    this.isError = false,
+  });
 
-  final String title;
+  final bool fromUser;
+  final String text;
   final String? subtitle;
   final bool saved;
+  final bool isError;
 }
 
 class LogScreen extends ConsumerStatefulWidget {
@@ -88,10 +96,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       return;
     }
     final lang = ref.read(voiceLangProvider);
-    setState(() {
-      _listening = true;
-      _pending = null;
-    });
+    setState(() => _listening = true);
     await _speech.listen(
       onResult: (result) {
         setState(() {
@@ -116,29 +121,46 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   Future<void> _submit() async {
     final text = _input.text.trim();
     if (text.isEmpty || _thinking) return;
-    final messenger = ScaffoldMessenger.of(context);
     final api = ref.read(apiClientProvider);
     final lang = ref.read(voiceLangProvider);
     _lastText = text;
     _input.clear();
     setState(() {
-      _thinking = true;
+      _history.add(_Msg(fromUser: true, text: text));
       _pending = null;
+      _thinking = true;
     });
     _scrollToBottom();
     try {
       final result = await api.ingestText(text, lang: lang);
       if (!mounted) return;
       setState(() {
-        _pending = result;
         _thinking = false;
+        final reply = result.reply;
+        if (reply != null && reply.isNotEmpty) {
+          _history.add(_Msg(fromUser: false, text: reply));
+        }
+        if (result.action == 'create' && result.events.isNotEmpty) {
+          _pending = result;
+        } else if (reply == null || reply.isEmpty) {
+          _history.add(_Msg(fromUser: false, text: _fallback(result)));
+        }
       });
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _thinking = false);
-      messenger.showSnackBar(SnackBar(content: Text('Could not process: $e')));
+      setState(() {
+        _thinking = false;
+        _history.add(_Msg(fromUser: false, text: friendlyError(e), isError: true));
+      });
+      _scrollToBottom();
     }
+  }
+
+  String _fallback(StructuredResult r) {
+    if (r.needsClarification != null) return r.needsClarification!;
+    if (r.action == 'query') return 'Asking about your logs is coming soon.';
+    return "I couldn't catch that — try again.";
   }
 
   Future<void> _saveEvent(StructuredEvent e, Baby baby) async {
@@ -158,8 +180,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       _afterSave(saved);
     } catch (err) {
       if (!mounted) return;
+      // Keep the confirm card so the caregiver can retry.
       setState(() => _saving = false);
-      messenger.showSnackBar(SnackBar(content: Text('Could not save: $err')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
     }
   }
 
@@ -169,7 +192,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       _saving = false;
       _pending = null;
       _history.add(_Msg(
-        title: eventSummary(saved.type, saved.subtype, saved.fields),
+        fromUser: false,
+        text: eventSummary(saved.type, saved.subtype, saved.fields),
         subtitle: 'Saved to the timeline',
         saved: true,
       ));
@@ -243,28 +267,55 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       children: [
-        _bubble(
+        _appBubble(
           active == null
               ? 'Add a baby in Settings to start logging.'
               : 'Tap the mic and tell me what happened.',
         ),
         for (final m in _history)
-          _bubble(m.title, subtitle: m.subtitle, saved: m.saved),
-        if (_thinking) _bubble('…'),
+          m.fromUser
+              ? _userBubble(m.text)
+              : _appBubble(m.text,
+                  subtitle: m.subtitle, saved: m.saved, isError: m.isError),
+        if (_thinking) _appBubble('…'),
         if (_pending != null && active != null)
-          _confirm(_pending!, active, babies),
+          _confirmCard(_pending!.events.first, active, babies),
       ],
     );
   }
 
-  Widget _bubble(String title, {String? subtitle, bool saved = false}) {
+  Widget _userBubble(String text) {
+    final scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10, left: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        constraints: const BoxConstraints(maxWidth: 380),
+        decoration: BoxDecoration(
+          color: scheme.primary,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(6),
+          ),
+        ),
+        child: Text(text, style: TextStyle(color: scheme.onPrimary)),
+      ),
+    );
+  }
+
+  Widget _appBubble(String text,
+      {String? subtitle, bool saved = false, bool isError = false}) {
     final theme = Theme.of(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        constraints: const BoxConstraints(maxWidth: 420),
+        margin: const EdgeInsets.only(bottom: 10, right: 44),
+        constraints: const BoxConstraints(maxWidth: 400),
         child: GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,12 +323,15 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               if (saved) ...[
                 Icon(Icons.check_circle, size: 18, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
+              ] else if (isError) ...[
+                Icon(Icons.error_outline, size: 18, color: theme.colorScheme.error),
+                const SizedBox(width: 8),
               ],
               Flexible(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.bodyLarge),
+                    Text(text, style: theme.textTheme.bodyLarge),
                     if (subtitle != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
@@ -295,33 +349,19 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     );
   }
 
-  Widget _confirm(StructuredResult r, Baby active, List<Baby> babies) {
-    if (r.needsClarification != null) return _bubble(r.needsClarification!);
-    if (r.action == 'query') {
-      return _bubble('Asking about your logs is coming soon.',
-          subtitle: r.events.isEmpty ? null : null);
-    }
-    if (r.events.isEmpty) {
-      return _bubble("I couldn't catch that — try again.");
-    }
-    final e = r.events.first;
+  Widget _confirmCard(StructuredEvent e, Baby active, List<Baby> babies) {
     final theme = Theme.of(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        constraints: const BoxConstraints(maxWidth: 420),
+        margin: const EdgeInsets.only(bottom: 10, right: 24),
+        constraints: const BoxConstraints(maxWidth: 400),
         child: GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(eventSummary(e.type, e.subtype, e.fields),
                   style: theme.textTheme.titleMedium),
-              if (e.note != null && e.note!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(e.note!, style: theme.textTheme.bodyMedium),
-                ),
               const SizedBox(height: 4),
               Text(formatTime(e.time ?? DateTime.now()),
                   style: theme.textTheme.bodySmall?.copyWith(
