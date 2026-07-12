@@ -212,8 +212,8 @@ Rules:
 - update and delete only ever refer to something already logged. If the utterance is really a
   new record, it is action=create, however it is phrased.
 - If the caregiver asks to change a unit/setting ("use Fahrenheit", "log feeds in ounces",
-  "무게는 파운드로 보여줘"), set "settings" with the changed keys and leave events empty. Still write a
-  "reply" confirming the change.
+  "show weight in pounds"), set "settings" with the changed keys and leave events empty. Still
+  write a "reply" confirming the change. The examples are English; the request will often not be.
 - Resolve relative and clock times ("last night", "8am", "two hours ago") against the current
   local time above, in that same timezone. Return "time" as ISO 8601 (with the offset, or UTC "Z").
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,

@@ -25,8 +25,9 @@ async def test_gemini_structures_english_feeding():
 async def test_gemini_handles_korean():
     from app.providers.llm.gemini import GeminiLLMProvider
 
-    # Korean input passed at runtime (not stored in the repo): "formula 120".
-    korean = "분유 120"
+    # The sample has to be Korean -- that is the thing being tested -- but the repo is
+    # English-only, so it is written as escapes. These code points read "formula 120".
+    korean = "\ubd84\uc720 120"
     provider = GeminiLLMProvider()
     result = await provider.structure_log(korean, LlmContext(now=datetime.now(timezone.utc)))
     assert result.events

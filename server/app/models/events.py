@@ -64,7 +64,7 @@ class LlmContext(BaseModel):
 
     now: datetime
     baby_names: list[str] = Field(default_factory=list)
-    # e.g. "해인 (5 months old, female)" — lets the model answer/tip by age.
+    # e.g. "Haein (5 months old, female)" — lets the model answer/tip by age.
     baby_profiles: list[str] = Field(default_factory=list)
     lang: Optional[str] = None
 
