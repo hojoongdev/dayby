@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'auth.dart';
 import 'providers.dart';
 import 'screens/home_screen.dart';
+import 'screens/lock_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/signin_screen.dart';
 import 'widgets/glass.dart';
@@ -37,13 +38,43 @@ class DaybyApp extends ConsumerWidget {
   }
 }
 
-/// Three questions, in order: does this server want a sign-in, are we signed in,
-/// and do we have a family yet.
-class _Entry extends ConsumerWidget {
+/// Four questions, in order: is the phone allowed to show this at all, does this
+/// server want a sign-in, are we signed in, and do we have a family yet.
+class _Entry extends ConsumerStatefulWidget {
   const _Entry();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Entry> createState() => _EntryState();
+}
+
+class _EntryState extends ConsumerState<_Entry> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Locked again the moment it leaves the screen. An app lock that survives the
+    // app switcher is not a lock.
+    if (state != AppLifecycleState.resumed) {
+      ref.read(unlockedProvider.notifier).lock();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (ref.watch(appLockEnabledProvider) && !ref.watch(unlockedProvider)) {
+      return const LockScreen();
+    }
+
     final config = ref.watch(authConfigProvider);
     final session = ref.watch(sessionProvider);
 

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
+import 'app_lock.dart';
 import 'auth.dart';
 import 'live.dart';
 import 'models/event.dart';
@@ -19,6 +20,7 @@ const familyNameKey = 'family_name';
 const inviteCodeKey = 'invite_code';
 const selectedBabyIdKey = 'selected_baby_id';
 const voiceLangKey = 'voice_lang';
+const appLockKey = 'app_lock';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('overridden in main'),
@@ -183,6 +185,39 @@ final liveFeedProvider = Provider<LiveFeed>((ref) => const WebSocketLiveFeed());
 
 /// Where a nudge is left for the operating system to deliver later.
 final remindersProvider = Provider<Reminders>((ref) => LocalReminders());
+
+final appLockProvider = Provider<AppLock>((ref) => BiometricAppLock());
+
+/// Whether this device can ask for a face or a fingerprint at all.
+final biometricsAvailableProvider =
+    FutureProvider<bool>((ref) => ref.watch(appLockProvider).isAvailable());
+
+/// Whether the caregiver has asked for the app to be locked, persisted.
+class AppLockEnabledNotifier extends Notifier<bool> {
+  @override
+  bool build() => ref.watch(sharedPrefsProvider).getBool(appLockKey) ?? false;
+
+  Future<void> set(bool enabled) async {
+    await ref.read(sharedPrefsProvider).setBool(appLockKey, enabled);
+    state = enabled;
+  }
+}
+
+final appLockEnabledProvider =
+    NotifierProvider<AppLockEnabledNotifier, bool>(AppLockEnabledNotifier.new);
+
+/// Whether it is unlocked right now. Not persisted — going away locks it again,
+/// which is the entire point.
+class UnlockedNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void unlock() => state = true;
+  void lock() => state = false;
+}
+
+final unlockedProvider =
+    NotifierProvider<UnlockedNotifier, bool>(UnlockedNotifier.new);
 
 /// Every event the family logs, as it lands — including the ones logged on the
 /// other parent's phone. The server tails a MongoDB change stream; this is the

@@ -87,6 +87,22 @@ class SettingsScreen extends ConsumerWidget {
           ],
           const _SectionHeader('Units'),
           const _UnitsSection(),
+          // Offered only where there is a sensor to ask.
+          if (ref.watch(biometricsAvailableProvider).value ?? false) ...[
+            const _SectionHeader('Privacy'),
+            SwitchListTile(
+              secondary: const Icon(Icons.fingerprint),
+              title: const Text('Lock Dayby'),
+              subtitle: const Text('Ask for Face ID or a fingerprint to open'),
+              value: ref.watch(appLockEnabledProvider),
+              onChanged: (on) async {
+                await ref.read(appLockEnabledProvider.notifier).set(on);
+                // They are already here and already themselves: turning the lock on
+                // must not lock them out of the screen they turned it on from.
+                if (on) ref.read(unlockedProvider.notifier).unlock();
+              },
+            ),
+          ],
           const Divider(height: 32),
           if (session != null)
             ListTile(
