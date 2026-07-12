@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
+from ..care import OVERDUE_AFTER
 from ..context import build_llm_context
 from ..db import get_db
 from ..deps import get_current_family, require_baby
@@ -20,6 +21,33 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 # How far ahead an appointment or a due todo is still worth mentioning.
 UPCOMING_WINDOW = timedelta(days=7)
+
+# Do not wake anyone for something a few minutes away; they are still holding the baby.
+REMINDER_FLOOR = timedelta(minutes=20)
+
+
+def next_reminder(
+    signals: list[CareSignal], now_dt: datetime
+) -> tuple[Optional[datetime], Optional[str]]:
+    """The next moment something goes overdue, and which thing it is.
+
+    Deterministic arithmetic on real last-seen times — the model is only ever asked
+    to write the sentence, never to decide when the phone should buzz.
+    """
+    due: list[tuple[datetime, str]] = []
+    for signal in signals:
+        gap = OVERDUE_AFTER.get(signal.type)
+        # A sleep in progress is not a sleep that is late.
+        if gap is None or signal.last_time is None:
+            continue
+        if signal.type == "sleep" and signal.last_subtype == "start":
+            continue
+        due.append((signal.last_time + gap, signal.type))
+
+    ahead = [(at, topic) for at, topic in due if at >= now_dt + REMINDER_FLOOR]
+    if not ahead:
+        return None, None
+    return min(ahead)
 
 
 async def care_signals(
@@ -93,17 +121,26 @@ async def tips(
     lang: Optional[str] = None,
     at: Optional[datetime] = Query(None, alias="now"),
 ) -> AssistantTips:
-    """Two or three short lines for this baby, right now, in the caller's language."""
+    """Two or three short lines for this baby, right now, in the caller's language —
+    plus the one to send later, when they have stopped looking at the app."""
     await require_baby(family, baby_id)
     now_dt = at or now()
 
     ctx = await build_llm_context(family, now_dt, lang)
     signals = await care_signals(family, baby_id, now_dt)
     upcoming = await upcoming_events(family, baby_id, now_dt)
+    remind_at, remind_topic = next_reminder(signals, now_dt)
+
+    written = await get_llm_provider().proactive_tips(
+        signals, upcoming, ctx, remind_at=remind_at, remind_topic=remind_topic
+    )
+    reminder = next((t.text for t in written if t.kind == "reminder"), None)
 
     return AssistantTips(
-        tips=await get_llm_provider().proactive_tips(signals, upcoming, ctx),
+        tips=[t for t in written if t.kind != "reminder"],
         signals=signals,
         upcoming=upcoming,
+        remind_at=remind_at if reminder else None,
+        reminder=reminder,
         lang=lang or "en",
     )

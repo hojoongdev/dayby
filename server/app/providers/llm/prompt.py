@@ -4,7 +4,8 @@ Written in English (repo rule), but it explicitly tells the model to accept inpu
 in ANY language (English, Korean, ...) and set the "lang" field accordingly. That
 is how Korean input works without any Korean text in the source.
 """
-from datetime import tzinfo
+from datetime import datetime, tzinfo
+from typing import Optional
 
 from ...models.events import (
     STANDARD_EVENT_TYPES,
@@ -53,8 +54,27 @@ def format_upcoming(upcoming: list[UpcomingEvent], tz: tzinfo | None) -> str:
     )
 
 
+def _reminder_rule(
+    remind_at: Optional[datetime], remind_topic: Optional[str], tz: tzinfo | None
+) -> str:
+    if remind_at is None or remind_topic is None:
+        return "- Do NOT write a line of kind \"reminder\" this time. There is nothing to send."
+    when = remind_at.astimezone(tz).isoformat()
+    return (
+        f'- Write exactly ONE line of kind "reminder", topic "{remind_topic}". The app will '
+        f"send it as a phone notification at {when}, not now, and probably while Dayby is "
+        f"closed. At that moment the {remind_topic} gap will just have gone long enough to "
+        "be worth a look. Write it for that moment: short, warm, and a nudge to check rather "
+        "than an accusation of having forgotten."
+    )
+
+
 def build_tips_instruction(
-    ctx: LlmContext, signals: list[CareSignal], upcoming: list[UpcomingEvent]
+    ctx: LlmContext,
+    signals: list[CareSignal],
+    upcoming: list[UpcomingEvent],
+    remind_at: Optional[datetime] = None,
+    remind_topic: Optional[str] = None,
 ) -> str:
     profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
     lang = ctx.lang or "the caregiver's language"
@@ -69,18 +89,24 @@ Care signals, aggregated from this family's real logs:
 Coming up (already in the caller's local time):
 {format_upcoming(upcoming, ctx.now.tzinfo)}
 
-Write at most 3 short lines, each one sentence:
+Write at most 3 short lines to show right now, each one sentence:
 - At most ONE "nudge": something that looks overdue or missing given the signals and the
   baby's age (e.g. a long gap since the last feed). Only if the signals actually support it.
 - A reminder of anything under "Coming up" that is close enough to matter.
 - One or two "tip" lines: age-appropriate care or development guidance for this baby's age.
 
+And then, separately, the line to send later:
+{_reminder_rule(remind_at, remind_topic, ctx.now.tzinfo)}
+
 Return ONLY a JSON object:
-{{"tips": [{{"kind": "nudge | tip", "topic": "<feeding|sleep|diaper|growth|development|...>",
+{{"tips": [{{"kind": "nudge | tip | reminder",
+            "topic": "<feeding|sleep|diaper|growth|development|...>",
             "text": "<one short, warm sentence>"}}]}}
 
 Rules:
 - Write every "text" in this language: {lang}. Keep it natural and warm, never clinical.
+- The "reminder" line, if there is one, is not shown with the others. It is a notification
+  for later, so it must make sense read on its own with no screen around it.
 - The facts above are the only ones you have. Never invent a number, a time, or an event
   that is not there. If a type was never logged, you may gently suggest logging it.
 - The times above are already the caller's local time. Say them the way a person would

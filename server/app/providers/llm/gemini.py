@@ -6,6 +6,7 @@ GOOGLE_GENAI_USE_VERTEXAI=true to use a Vertex AI Express api key.
 """
 import json
 import logging
+from datetime import datetime
 from typing import Optional
 
 from google import genai
@@ -177,13 +178,17 @@ class GeminiLLMProvider(LLMProvider):
         signals: list[CareSignal],
         upcoming: list[UpcomingEvent],
         ctx: LlmContext,
+        remind_at: Optional[datetime] = None,
+        remind_topic: Optional[str] = None,
     ) -> list[Tip]:
         try:
             response = await self._client.aio.models.generate_content(
                 model=self._model,
                 contents="Write today's tips.",
                 config=types.GenerateContentConfig(
-                    system_instruction=build_tips_instruction(ctx, signals, upcoming),
+                    system_instruction=build_tips_instruction(
+                        ctx, signals, upcoming, remind_at, remind_topic
+                    ),
                     response_mime_type="application/json",
                     # Warmer than structuring: the same three sentences every hour
                     # would stop being worth reading.
@@ -191,7 +196,7 @@ class GeminiLLMProvider(LLMProvider):
                 ),
             )
             data = json.loads((response.text or "{}").strip())
-            return [Tip.model_validate(t) for t in data.get("tips", [])][:3]
+            return [Tip.model_validate(t) for t in data.get("tips", [])][:4]
         except Exception:
             # Tips are a bonus surface: on failure the card simply does not appear.
             logger.exception("Gemini proactive_tips failed")

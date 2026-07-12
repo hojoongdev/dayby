@@ -123,7 +123,9 @@ class UpcomingEvent(BaseModel):
 class Tip(BaseModel):
     """A short proactive line the assistant says before being asked."""
 
-    # "nudge" = something looks overdue; "tip" = age-appropriate guidance.
+    # "nudge"    something looks overdue right now
+    # "tip"      age-appropriate guidance
+    # "reminder" what to say later, in a notification, when the next gap opens up
     kind: str = "tip"
     topic: Optional[str] = None
     text: str
@@ -133,6 +135,13 @@ class AssistantTips(BaseModel):
     tips: list[Tip] = Field(default_factory=list)
     signals: list[CareSignal] = Field(default_factory=list)
     upcoming: list[UpcomingEvent] = Field(default_factory=list)
+
+    # When the next gap opens up, and what to say then. The app hands both to the
+    # operating system, which delivers it whether or not Dayby is running -- the
+    # whole point of a nudge is that it arrives when you have forgotten to look.
+    remind_at: Optional[datetime] = None
+    reminder: Optional[str] = None
+
     lang: str = "en"
 
 

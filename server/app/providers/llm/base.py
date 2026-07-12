@@ -1,5 +1,6 @@
 """LLM provider interface."""
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Optional
 
 from ...models.events import (
@@ -44,11 +45,17 @@ class LLMProvider(ABC):
         signals: list[CareSignal],
         upcoming: list[UpcomingEvent],
         ctx: LlmContext,
+        remind_at: Optional[datetime] = None,
+        remind_topic: Optional[str] = None,
     ) -> list[Tip]:
         """Speak first: what the caregiver should hear before they ask.
 
         The signals are aggregated from the family's real logs and are the only
         facts available — the model writes the sentence, never the numbers.
+
+        When `remind_at` is given, one of the returned lines should have kind
+        "reminder": what to say in a notification at that moment, which has not
+        arrived yet. When it is not, none should.
         """
         ...
 

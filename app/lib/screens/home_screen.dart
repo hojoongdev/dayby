@@ -36,6 +36,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref.invalidate(tipsProvider(event.babyId));
     });
 
+    // Every time the assistant recalculates -- on launch, on a save, on the other
+    // parent's save -- the pending nudge is replaced with the one that is true now.
+    // Logging the feed is what cancels the reminder about the feed.
+    final baby = ref.watch(activeBabyProvider);
+    if (baby != null) {
+      ref.listen(tipsProvider(baby.id), (_, next) {
+        final tips = next.value;
+        if (tips == null) return;
+        ref.read(remindersProvider).schedule(at: tips.remindAt, text: tips.reminder);
+      });
+    }
+
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(

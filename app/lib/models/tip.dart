@@ -18,9 +18,19 @@ class Tip {
 }
 
 class AssistantTips {
-  const AssistantTips({this.tips = const [], this.lang = 'en'});
+  const AssistantTips({
+    this.tips = const [],
+    this.remindAt,
+    this.reminder,
+    this.lang = 'en',
+  });
 
   final List<Tip> tips;
+
+  /// When the next gap opens up, and what to say then. Not shown with the others —
+  /// this one is handed to the phone, to arrive when nobody is looking at Dayby.
+  final DateTime? remindAt;
+  final String? reminder;
 
   /// The language the model wrote in — also the voice TTS should read them with.
   final String lang;
@@ -29,6 +39,10 @@ class AssistantTips {
         tips: (json['tips'] as List? ?? const [])
             .map((t) => Tip.fromJson(t as Map<String, dynamic>))
             .toList(),
+        remindAt: json['remind_at'] == null
+            ? null
+            : DateTime.parse(json['remind_at'] as String),
+        reminder: json['reminder'] as String?,
         lang: json['lang'] as String? ?? 'en',
       );
 }

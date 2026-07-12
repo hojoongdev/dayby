@@ -7,7 +7,9 @@ stays intentionally simple and language-limited.
 """
 import re
 from datetime import datetime
+from typing import Optional
 
+from ...care import OVERDUE_AFTER
 from ...models.events import (
     Action,
     CareSignal,
@@ -25,9 +27,6 @@ _NUMBER = re.compile(r"(\d+(?:\.\d+)?)")
 _QUESTION_HINTS = ("?", "when ", "how much", "how many", "how long", "last ", "total")
 _DELETE_HINTS = ("delete", "remove", "undo", "scratch that")
 _EDIT_HINTS = ("change", "correct", "actually", "make it", "fix")
-
-# Gaps (in hours) that start to look like a missed log rather than a quiet stretch.
-_OVERDUE_AFTER = {"feeding": 4.0, "diaper": 3.0, "sleep": 6.0}
 
 
 def _first_number(text: str) -> int | float | None:
@@ -53,6 +52,8 @@ class MockLLMProvider(LLMProvider):
         signals: list[CareSignal],
         upcoming: list[UpcomingEvent],
         ctx: LlmContext,
+        remind_at: Optional[datetime] = None,
+        remind_topic: Optional[str] = None,
     ) -> list[Tip]:
         # Nudges and reminders are arithmetic on real signals, so the mock gets those
         # right offline. The age tip is knowledge, so it stays honest about needing
@@ -62,7 +63,8 @@ class MockLLMProvider(LLMProvider):
         overdue = [
             s for s in signals
             if s.hours_since is not None
-            and s.hours_since >= _OVERDUE_AFTER.get(s.type, float("inf"))
+            and s.type in OVERDUE_AFTER
+            and s.hours_since >= OVERDUE_AFTER[s.type].total_seconds() / 3600
             # A sleep still going is not a sleep that is overdue.
             and not (s.type == "sleep" and s.last_subtype == "start")
         ]
@@ -95,6 +97,13 @@ class MockLLMProvider(LLMProvider):
                 kind="tip",
                 topic="development",
                 text=f"Age tips for {who} need a real model.",
+            ))
+
+        if remind_at is not None and remind_topic is not None:
+            tips.append(Tip(
+                kind="reminder",
+                topic=remind_topic,
+                text=f"It has been a while since the last {remind_topic} — worth a look.",
             ))
         return tips
 

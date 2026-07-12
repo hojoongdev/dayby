@@ -11,6 +11,7 @@ import 'models/event.dart';
 import 'models/family.dart';
 import 'models/tip.dart';
 import 'models/wrapped.dart';
+import 'reminders.dart';
 import 'units.dart';
 
 const familyIdKey = 'family_id';
@@ -179,6 +180,9 @@ final eventsProvider = FutureProvider.family<List<Event>, String>(
 final imagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
 
 final liveFeedProvider = Provider<LiveFeed>((ref) => const WebSocketLiveFeed());
+
+/// Where a nudge is left for the operating system to deliver later.
+final remindersProvider = Provider<Reminders>((ref) => LocalReminders());
 
 /// Every event the family logs, as it lands — including the ones logged on the
 /// other parent's phone. The server tails a MongoDB change stream; this is the
