@@ -8,7 +8,7 @@ from ..db import get_db
 from ..deps import get_current_family, require_baby
 from ..models.events import EventCreate, EventOut, EventUpdate
 from ..photos import delete_photo
-from ..util import new_id, now
+from ..util import as_utc, new_id, now
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -27,6 +27,32 @@ def event_out(doc: dict) -> EventOut:
     )
 
 
+async def _minutes_asleep(
+    family_id: str, baby_id: str, woke_at: datetime
+) -> Optional[int]:
+    """How long this wake-up ends, if it ends anything.
+
+    Nobody says "she slept for two hours and eleven minutes" — they say she went
+    down, and later that she woke up. The duration is arithmetic, so the app should
+    do it rather than ask.
+    """
+    last_sleep = await get_db().events.find_one(
+        {
+            "family_id": family_id,
+            "baby_id": baby_id,
+            "type": "sleep",
+            "time": {"$lt": woke_at},
+        },
+        sort=[("time", -1)],
+    )
+    # Two wake-ups in a row: there is no nap between them to measure.
+    if last_sleep is None or last_sleep.get("subtype") != "start":
+        return None
+
+    minutes = round((woke_at - as_utc(last_sleep["time"])).total_seconds() / 60)
+    return minutes if minutes > 0 else None
+
+
 @router.post("", response_model=EventOut, status_code=201)
 async def create_event(
     body: EventCreate,
@@ -39,13 +65,19 @@ async def create_event(
         "baby_id": body.baby_id,
         "type": body.type,
         "subtype": body.subtype,
-        "fields": body.fields,
-        "time": body.time or now(),
+        "fields": dict(body.fields),
+        "time": as_utc(body.time) if body.time else now(),
         "note": body.note,
         "source": body.source,
         "raw_text": body.raw_text,
         "created_at": now(),
     }
+
+    if body.type == "sleep" and body.subtype == "end" and "duration_min" not in doc["fields"]:
+        minutes = await _minutes_asleep(family["_id"], body.baby_id, doc["time"])
+        if minutes is not None:
+            doc["fields"]["duration_min"] = minutes
+
     await get_db().events.insert_one(doc)
     return event_out(doc)
 

@@ -63,6 +63,8 @@ class MockLLMProvider(LLMProvider):
             s for s in signals
             if s.hours_since is not None
             and s.hours_since >= _OVERDUE_AFTER.get(s.type, float("inf"))
+            # A sleep still going is not a sleep that is overdue.
+            and not (s.type == "sleep" and s.last_subtype == "start")
         ]
         if overdue:
             worst = max(overdue, key=lambda s: s.hours_since or 0)

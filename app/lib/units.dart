@@ -25,6 +25,15 @@ class UnitPrefs {
 String _n(num x) =>
     x == x.roundToDouble() ? x.toInt().toString() : x.toStringAsFixed(1);
 
+/// "45m" / "2h 15m" / "3h" — nobody reads a nap as 135 minutes.
+String formatMinutes(num minutes) {
+  final total = minutes.round();
+  if (total < 60) return '${total}m';
+  final hours = total ~/ 60;
+  final rest = total % 60;
+  return rest == 0 ? '${hours}h' : '${hours}h ${rest}m';
+}
+
 /// Format one open field for display, converting known measures to [u].
 /// Unknown fields fall back to "key value". Handles either stored unit
 /// (e.g. amount_ml or amount_oz) so mixed data still shows consistently.
@@ -49,7 +58,7 @@ String formatField(String key, dynamic value, UnitPrefs u) {
       if (n != null && u.length == 'm') return '${_n(n / 100)} m';
       return '$value cm';
     case 'duration_min':
-      return '$value min';
+      return n == null ? '$value min' : formatMinutes(n);
     case 'item':
     case 'title':
       return '$value';

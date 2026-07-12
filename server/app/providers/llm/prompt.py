@@ -24,10 +24,16 @@ def format_signals(signals: list[CareSignal]) -> str:
         parts = [f"- {s.type}:"]
         if s.hours_since is not None:
             parts.append(f"last {s.hours_since}h ago")
+        if s.last_subtype:
+            parts.append(f"({s.last_subtype})")
         if s.count_today:
             parts.append(f"{s.count_today} today")
         parts.append(f"{s.total} logged in total")
         lines.append(" ".join(parts))
+    # The one inference worth spelling out, because it changes what is worth saying.
+    if any(s.type == "sleep" and s.last_subtype == "start" for s in signals):
+        lines.append("The last sleep was a start with no wake-up after it: the baby "
+                     "is asleep right now.")
     return "\n".join(lines)
 
 

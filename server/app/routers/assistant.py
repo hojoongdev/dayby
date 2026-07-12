@@ -40,6 +40,7 @@ async def care_signals(
         {"$group": {
             "_id": "$type",
             "last_time": {"$max": "$time"},
+            "last_subtype": {"$top": {"sortBy": {"time": -1}, "output": "$subtype"}},
             "count_today": {"$sum": {"$cond": [{"$gte": ["$time", day_start]}, 1, 0]}},
             "total": {"$sum": 1},
         }},
@@ -51,6 +52,7 @@ async def care_signals(
         signals.append(CareSignal(
             type=row["_id"],
             last_time=last,
+            last_subtype=row.get("last_subtype"),
             hours_since=round((now_dt - last).total_seconds() / 3600, 1),
             count_today=row["count_today"],
             total=row["total"],

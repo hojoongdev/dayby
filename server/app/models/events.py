@@ -103,6 +103,9 @@ class CareSignal(BaseModel):
 
     type: str
     last_time: Optional[datetime] = None
+    # Whether the last one was a "start" or an "end" matters: a sleep that started
+    # two hours ago and never ended means the baby is asleep right now.
+    last_subtype: Optional[str] = None
     hours_since: Optional[float] = None
     count_today: int = 0
     total: int = 0

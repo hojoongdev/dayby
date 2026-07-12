@@ -5,6 +5,7 @@ import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
 import '../providers.dart';
+import '../units.dart';
 import '../widgets/assistant_card.dart';
 import '../widgets/glass.dart';
 
@@ -107,11 +108,21 @@ class _Dashboard extends ConsumerWidget {
           label: 'Last diaper',
           event: diaper,
         ),
-        _StatCard(
-          icon: Icons.bedtime_outlined,
-          label: 'Last sleep',
-          event: sleep,
-        ),
+        // A sleep that started and has not ended is a baby who is asleep right now,
+        // which is a different thing to know than when she last slept.
+        if (sleep?.subtype == 'start')
+          _StatCard(
+            icon: Icons.bedtime,
+            label: 'Asleep for',
+            event: sleep,
+            value: formatMinutes(DateTime.now().difference(sleep!.time).inMinutes),
+          )
+        else
+          _StatCard(
+            icon: Icons.bedtime_outlined,
+            label: 'Last sleep',
+            event: sleep,
+          ),
         GlassCard(
           margin: const EdgeInsets.only(bottom: 12),
           child: Row(
@@ -134,11 +145,20 @@ class _Dashboard extends ConsumerWidget {
 }
 
 class _StatCard extends ConsumerWidget {
-  const _StatCard({required this.icon, required this.label, this.event});
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    this.event,
+    this.value,
+  });
 
   final IconData icon;
   final String label;
   final Event? event;
+
+  /// Overrides the usual "N ago" headline, for a card that is about something
+  /// still happening rather than something that happened.
+  final String? value;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -164,7 +184,7 @@ class _StatCard extends ConsumerWidget {
                 if (event == null)
                   Text('Not logged yet', style: theme.textTheme.titleMedium)
                 else ...[
-                  Text(formatAgo(event!.time),
+                  Text(value ?? formatAgo(event!.time),
                       style: theme.textTheme.titleMedium),
                   Text(
                     eventSummary(event!.type, event!.subtype, event!.fields,

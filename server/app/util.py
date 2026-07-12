@@ -9,6 +9,11 @@ def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def as_utc(dt: datetime) -> datetime:
+    """Everything here is UTC, so a datetime with no offset already is one."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def tz_offset(dt: datetime) -> str:
     """"+09:00" — the caller's offset in the form MongoDB's date operators accept.
 
