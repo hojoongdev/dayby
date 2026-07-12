@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
@@ -80,6 +83,16 @@ final activeBabyProvider = Provider<Baby?>((ref) {
 /// Timeline for one baby, newest first. Invalidate to refetch after a save.
 final eventsProvider = FutureProvider.family<List<Event>, String>(
   (ref, babyId) => ref.watch(apiClientProvider).listEvents(babyId: babyId),
+);
+
+/// The camera / library picker. Behind a provider so a test can hand the screen a
+/// picture without opening a platform dialog.
+final imagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
+
+/// A stored photo, fetched through the API client so it carries the family header.
+/// Cached by id, which is safe: a photo never changes once written.
+final photoProvider = FutureProvider.family<Uint8List, String>(
+  (ref, photoId) => ref.watch(apiClientProvider).photoBytes(photoId),
 );
 
 /// The assistant's proactive lines for one baby. Invalidated on every save: a

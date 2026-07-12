@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../config.dart';
@@ -106,6 +108,39 @@ class ApiClient {
     return (res.data as List)
         .map((e) => Event.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// A photo, with or without words. The server stores it and the model reads it;
+  /// what comes back is the same confirm-and-save shape as a typed sentence.
+  Future<IngestPhotoResult> ingestPhoto({
+    required String babyId,
+    required Uint8List bytes,
+    required String filename,
+    required String mimeType,
+    String text = '',
+    String? lang,
+  }) async {
+    final form = FormData.fromMap({
+      'baby_id': babyId,
+      'text': text,
+      'lang': ?lang,
+      'now': _localNowIso(),
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    });
+    final res = await _dio.post('/ingest/photo', data: form);
+    return IngestPhotoResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Uint8List> photoBytes(String photoId) async {
+    final res = await _dio.get<List<int>>(
+      '/photos/$photoId',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(res.data!);
   }
 
   /// What the assistant would say right now, unprompted.

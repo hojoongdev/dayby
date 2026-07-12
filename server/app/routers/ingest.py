@@ -3,20 +3,23 @@
 Both endpoints return a confirmation payload; nothing is saved until the user
 confirms and posts to /events.
 """
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from ..context import build_llm_context
 from ..db import get_db
-from ..deps import get_current_family
+from ..deps import get_current_family, require_baby
 from ..models.events import (
     Action,
+    IngestPhotoResponse,
     IngestTextRequest,
     IngestVoiceResponse,
     LlmContext,
     StructuredResult,
 )
+from ..photos import store_photo
 from ..providers import get_llm_provider, get_stt_provider
 from ..util import now
 
@@ -79,3 +82,33 @@ async def ingest_voice(
     result = await get_llm_provider().structure_log(transcript, ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     return IngestVoiceResponse(transcript=transcript, result=result)
+
+
+@router.post("/photo", response_model=IngestPhotoResponse)
+async def ingest_photo(
+    file: UploadFile = File(...),
+    baby_id: str = Form(...),
+    text: str = Form(""),
+    lang: Optional[str] = Form(None),
+    at: Optional[datetime] = Form(None, alias="now"),
+    family: dict = Depends(get_current_family),
+) -> IngestPhotoResponse:
+    """A picture, with or without words: "is this rash normal?", or just a first smile.
+
+    The photo is stored before the model sees it and its id is stitched into every
+    event that comes back, so confirming the result saves the picture along with it.
+    The model is told not to diagnose — it describes what it can see and points at a
+    pediatrician.
+    """
+    await require_baby(family, baby_id)
+
+    data = await file.read()
+    content_type = file.content_type or ""
+    photo_id = await store_photo(data, content_type, family["_id"], baby_id)
+
+    ctx = await build_llm_context(family, at or now(), lang)
+    result = await get_llm_provider().structure_photo(data, content_type, text, ctx)
+    for event in result.events:
+        event.fields["photo_id"] = photo_id
+
+    return IngestPhotoResponse(photo_id=photo_id, result=result)

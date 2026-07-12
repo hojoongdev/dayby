@@ -27,6 +27,16 @@ class LLMProvider(ABC):
         ...
 
     @abstractmethod
+    async def structure_photo(
+        self, image: bytes, mime_type: str, text: str, ctx: LlmContext
+    ) -> StructuredResult:
+        """Same as structure_log, but the caregiver also took a picture.
+
+        `text` may be empty: a photo on its own is a valid thing to log.
+        """
+        ...
+
+    @abstractmethod
     async def proactive_tips(
         self,
         signals: list[CareSignal],

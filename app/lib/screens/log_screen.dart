@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../api/api_client.dart';
@@ -16,6 +19,7 @@ class _Msg {
   const _Msg({
     required this.fromUser,
     required this.text,
+    this.photo,
     this.subtitle,
     this.saved = false,
     this.isError = false,
@@ -23,9 +27,25 @@ class _Msg {
 
   final bool fromUser;
   final String text;
+
+  /// The picture that was sent with this message, if any.
+  final Uint8List? photo;
   final String? subtitle;
   final bool saved;
   final bool isError;
+}
+
+/// A picture the caregiver attached but has not sent yet.
+class _Attachment {
+  const _Attachment({
+    required this.bytes,
+    required this.filename,
+    required this.mime,
+  });
+
+  final Uint8List bytes;
+  final String filename;
+  final String mime;
 }
 
 class LogScreen extends ConsumerStatefulWidget {
@@ -47,6 +67,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   final List<_Msg> _history = [];
   StructuredResult? _pending;
+  _Attachment? _photo;
   String _lastText = '';
   bool _thinking = false;
   bool _saving = false;
@@ -137,21 +158,98 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     if (hasText) _submit();
   }
 
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final picked = await ref.read(imagePickerProvider).pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+      setState(() => _photo = _Attachment(
+            bytes: bytes,
+            filename: picked.name,
+            mime: _mimeOf(picked),
+          ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
+  /// The picker only promises a name on some platforms, so fall back to the
+  /// extension. The server rejects anything that isn't an image either way.
+  String _mimeOf(XFile file) {
+    final reported = file.mimeType;
+    if (reported != null && reported.isNotEmpty) return reported;
+    final name = file.name.toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    if (name.endsWith('.heic')) return 'image/heic';
+    return 'image/jpeg';
+  }
+
+  void _attachSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from library'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _thinking) return;
+    final photo = _photo;
+    // A picture on its own is a perfectly good log.
+    if ((text.isEmpty && photo == null) || _thinking) return;
     final api = ref.read(apiClientProvider);
     final lang = ref.read(voiceLangProvider);
+    final baby = ref.read(activeBabyProvider);
+    if (photo != null && baby == null) return;
     _lastText = text;
     _input.clear();
     setState(() {
-      _history.add(_Msg(fromUser: true, text: text));
+      _history.add(_Msg(fromUser: true, text: text, photo: photo?.bytes));
       _pending = null;
+      _photo = null;
       _thinking = true;
     });
     _scrollToBottom();
     try {
-      final result = await api.ingestText(text, lang: lang);
+      final result = photo == null
+          ? await api.ingestText(text, lang: lang)
+          : (await api.ingestPhoto(
+              babyId: baby!.id,
+              bytes: photo.bytes,
+              filename: photo.filename,
+              mimeType: photo.mime,
+              text: text,
+              lang: lang,
+            ))
+              .result;
       if (!mounted) return;
       setState(() {
         _thinking = false;
@@ -320,7 +418,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         ),
         for (final m in _history)
           m.fromUser
-              ? _userBubble(m.text)
+              ? _userBubble(m.text, photo: m.photo)
               : _appBubble(m.text,
                   subtitle: m.subtitle, saved: m.saved, isError: m.isError),
         if (_thinking) _appBubble('…'),
@@ -330,13 +428,16 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     );
   }
 
-  Widget _userBubble(String text) {
+  Widget _userBubble(String text, {Uint8List? photo}) {
     final scheme = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10, left: 44),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: photo == null ? 16 : 10,
+          vertical: 10,
+        ),
         constraints: const BoxConstraints(maxWidth: 380),
         decoration: BoxDecoration(
           color: scheme.primary,
@@ -347,7 +448,26 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             bottomRight: Radius.circular(6),
           ),
         ),
-        child: Text(text, style: TextStyle(color: scheme.onPrimary)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (photo != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(photo, width: 200, fit: BoxFit.cover),
+              ),
+            if (text.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: photo == null ? 0 : 8,
+                  right: photo == null ? 0 : 6,
+                  left: photo == null ? 0 : 6,
+                ),
+                child: Text(text, style: TextStyle(color: scheme.onPrimary)),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -444,36 +564,80 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final canType = active != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      child: GlassCard(
-        radius: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: _speechAvailable && canType ? _toggleMic : null,
-              tooltip: _listening ? 'Stop' : 'Speak',
-              color: _listening ? theme.colorScheme.error : theme.colorScheme.primary,
-              icon: Icon(_listening ? Icons.stop_circle : Icons.mic),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _input,
-                enabled: canType,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration.collapsed(
-                  hintText: _listening ? 'Listening…' : 'Say or type…',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_photo != null) _attachedPreview(_photo!),
+          GlassCard(
+            radius: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: _speechAvailable && canType ? _toggleMic : null,
+                  tooltip: _listening ? 'Stop' : 'Speak',
+                  color: _listening
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+                  icon: Icon(_listening ? Icons.stop_circle : Icons.mic),
                 ),
+                IconButton(
+                  onPressed: canType ? _attachSheet : null,
+                  tooltip: 'Attach a photo',
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    enabled: canType,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _submit(),
+                    decoration: InputDecoration.collapsed(
+                      hintText: _listening ? 'Listening…' : 'Say or type…',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: (_thinking || !canType) ? null : _submit,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _attachedPreview(_Attachment photo) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 8),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(photo.bytes,
+                width: 64, height: 64, fit: BoxFit.cover),
+          ),
+          Positioned(
+            top: -10,
+            right: -10,
+            child: IconButton(
+              tooltip: 'Remove',
+              iconSize: 18,
+              onPressed: () => setState(() => _photo = null),
+              icon: const CircleAvatar(
+                radius: 11,
+                backgroundColor: Colors.black54,
+                child: Icon(Icons.close, size: 13, color: Colors.white),
               ),
             ),
-            IconButton(
-              onPressed: (_thinking || !canType) ? null : _submit,
-              icon: const Icon(Icons.send),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -93,6 +93,24 @@ class MockLLMProvider(LLMProvider):
             ))
         return tips
 
+    async def structure_photo(
+        self, image: bytes, mime_type: str, text: str, ctx: LlmContext
+    ) -> StructuredResult:
+        # Seeing is the one thing a mock cannot fake. Keep the photo, classify from
+        # the words alone, and be honest that nobody looked at the picture.
+        lang = ctx.lang or "en"
+        if not text.strip():
+            return StructuredResult(
+                events=[StructuredEvent(
+                    type="memo", time=ctx.now, confidence=Confidence.low,
+                )],
+                reply="Photo saved. Looking at it needs a real model.",
+                lang=lang,
+            )
+        result = await self.structure_log(text, ctx)
+        result.reply = f"Photo saved. {result.reply or ''}".strip()
+        return result
+
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
         lower = text.lower().strip()
         lang = ctx.lang or "en"

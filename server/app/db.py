@@ -6,11 +6,16 @@ tests that spin up a fresh event loop per TestClient.
 """
 from datetime import timezone
 
+from gridfs.asynchronous import AsyncGridFSBucket
 from pymongo import AsyncMongoClient
 
 from .config import settings
 
 _client: AsyncMongoClient | None = None
+
+# Photos live in GridFS rather than in the event documents: a few megabytes of
+# JPEG has no business inside a record we read on every timeline load.
+PHOTO_BUCKET = "photos"
 
 
 def get_client() -> AsyncMongoClient:
@@ -33,6 +38,10 @@ def get_db():
     return get_client()[settings.db_name]
 
 
+def get_photo_bucket() -> AsyncGridFSBucket:
+    return AsyncGridFSBucket(get_db(), bucket_name=PHOTO_BUCKET)
+
+
 async def ping() -> bool:
     """Return True if the database answers a ping, False otherwise."""
     try:
@@ -47,6 +56,7 @@ async def ensure_indexes() -> None:
     db = get_db()
     await db.events.create_index([("family_id", 1), ("baby_id", 1), ("time", -1)])
     await db.babies.create_index([("family_id", 1)])
+    await db[f"{PHOTO_BUCKET}.files"].create_index([("metadata.family_id", 1)])
 
 
 async def close_client() -> None:

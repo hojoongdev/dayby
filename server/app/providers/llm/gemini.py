@@ -21,7 +21,11 @@ from ...models.events import (
     UpcomingEvent,
 )
 from .base import LLMProvider
-from .prompt import build_system_instruction, build_tips_instruction
+from .prompt import (
+    build_photo_instruction,
+    build_system_instruction,
+    build_tips_instruction,
+)
 
 logger = logging.getLogger("dayby.gemini")
 
@@ -58,6 +62,37 @@ class GeminiLLMProvider(LLMProvider):
                 events=[
                     StructuredEvent(
                         type="memo", note=text, time=ctx.now, confidence=Confidence.low
+                    )
+                ],
+                lang=ctx.lang or "en",
+            )
+
+    async def structure_photo(
+        self, image: bytes, mime_type: str, text: str, ctx: LlmContext
+    ) -> StructuredResult:
+        said = text.strip() or "(the caregiver said nothing; describe the photo)"
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=[
+                    types.Part.from_bytes(data=image, mime_type=mime_type),
+                    types.Part.from_text(text=said),
+                ],
+                config=types.GenerateContentConfig(
+                    system_instruction=build_photo_instruction(ctx),
+                    response_mime_type="application/json",
+                    temperature=0.2,
+                ),
+            )
+            return StructuredResult.model_validate_json((response.text or "").strip())
+        except Exception:
+            # A photo is never worth losing: keep it as a memo the caregiver can edit.
+            logger.exception("Gemini photo structuring failed; falling back to memo")
+            return StructuredResult(
+                events=[
+                    StructuredEvent(
+                        type="memo", note=text or None, time=ctx.now,
+                        confidence=Confidence.low,
                     )
                 ],
                 lang=ctx.lang or "en",

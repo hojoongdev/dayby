@@ -66,6 +66,21 @@ class StructuredEvent {
       );
 }
 
+/// What comes back from a photo: where it was stored, and what the model made of it.
+/// The photo id is already inside every event's `fields`, so saving keeps them together.
+class IngestPhotoResult {
+  const IngestPhotoResult({required this.photoId, required this.result});
+
+  final String photoId;
+  final StructuredResult result;
+
+  factory IngestPhotoResult.fromJson(Map<String, dynamic> json) =>
+      IngestPhotoResult(
+        photoId: json['photo_id'] as String,
+        result: StructuredResult.fromJson(json['result'] as Map<String, dynamic>),
+      );
+}
+
 class StructuredResult {
   const StructuredResult({
     this.action = 'create',

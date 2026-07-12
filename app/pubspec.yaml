@@ -39,6 +39,7 @@ dependencies:
   flutter_riverpod: ^3.3.2
   speech_to_text: ^7.0.0
   flutter_tts: ^4.2.0
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

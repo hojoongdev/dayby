@@ -78,6 +78,17 @@ class IngestVoiceResponse(BaseModel):
     result: StructuredResult
 
 
+class IngestPhotoResponse(BaseModel):
+    """Photo ingest: where the photo was stored plus the structured result.
+
+    The photo is already in GridFS by the time this returns, and its id is stitched
+    into every event's `fields`, so confirming the result saves the picture with it.
+    """
+
+    photo_id: str
+    result: StructuredResult
+
+
 class CareSignal(BaseModel):
     """One event type's recent history, aggregated from the family's real logs.
 

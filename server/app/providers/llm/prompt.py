@@ -84,6 +84,30 @@ Rules:
 - Output JSON only. No markdown fences, no commentary."""
 
 
+def build_photo_instruction(ctx: LlmContext) -> str:
+    """The logging instruction, plus what to do when there is a picture attached.
+
+    Same JSON contract as a typed or spoken utterance, so a photo flows through the
+    existing confirm-and-save path with nothing new to handle in the app.
+    """
+    return build_system_instruction(ctx) + """
+
+You are also shown a PHOTO of the baby, taken by the caregiver just now.
+
+Photo rules:
+- Describe only what is actually visible. Put a short factual description in "note"
+  (e.g. "small red spots on the left cheek"), never an interpretation of what it is.
+- NEVER diagnose, never name a condition, never rule one out, and never suggest a
+  treatment or a medicine — not even a likely-sounding one, and not even if asked
+  directly. You are not able to, and saying so plainly is the correct answer.
+- If the photo or the words suggest anything health-related, "reply" must say what you
+  can see, and then recommend having a pediatrician look at it.
+- Pick the event "type" from what the picture is: a rash or a symptom is a health record
+  (e.g. "rash", "symptom"), a first step or a smile is "milestone", anything else is a
+  short custom type or "memo". Never drop the photo — it is always worth keeping.
+- If the caregiver said nothing at all, still write a warm "reply" describing what you see."""
+
+
 def build_system_instruction(ctx: LlmContext) -> str:
     babies = ", ".join(ctx.baby_names) if ctx.baby_names else "(none registered)"
     profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
