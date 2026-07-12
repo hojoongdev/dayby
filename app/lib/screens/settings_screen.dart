@@ -17,6 +17,7 @@ class SettingsScreen extends ConsumerWidget {
     final babies = ref.watch(babiesProvider);
     final active = ref.watch(activeBabyProvider);
     final activeId = active?.id;
+    final session = ref.watch(sessionProvider).value;
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -79,6 +80,14 @@ class SettingsScreen extends ConsumerWidget {
           const _SectionHeader('Units'),
           const _UnitsSection(),
           const Divider(height: 32),
+          if (session != null)
+            ListTile(
+              leading: const Icon(Icons.account_circle_outlined),
+              title: Text(session.user.email ?? session.user.name ?? 'Signed in'),
+              subtitle: const Text('Sign out'),
+              trailing: const Icon(Icons.logout),
+              onTap: () => ref.read(sessionProvider.notifier).signOut(),
+            ),
           ListTile(
             leading: Icon(Icons.logout, color: scheme.error),
             title: Text('Reset app', style: TextStyle(color: scheme.error)),

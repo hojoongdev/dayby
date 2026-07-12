@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/api_client.dart';
+import '../models/family.dart';
 import '../providers.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -33,9 +35,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final family = await api.createFamily(familyName);
       api.setFamilyId(family.id);
       final baby = await api.addBaby(name: babyName);
-      final prefs = ref.read(sharedPrefsProvider);
-      await prefs.setString(familyNameKey, family.name);
-      await prefs.setString(inviteCodeKey, family.inviteCode);
+      await _remember(family);
       await ref.read(selectedBabyIdProvider.notifier).set(baby.id);
       await ref.read(familyIdProvider.notifier).set(family.id);
     } catch (e) {
@@ -44,6 +44,37 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not create your family: $e')),
       );
+    }
+  }
+
+  Future<void> _remember(Family family) async {
+    final prefs = ref.read(sharedPrefsProvider);
+    await prefs.setString(familyNameKey, family.name);
+    await prefs.setString(inviteCodeKey, family.inviteCode);
+    ref.read(sessionProvider.notifier).joinedFamily(family.id);
+  }
+
+  /// The other half of the invite code: the second parent joins the family that is
+  /// already there, rather than starting a second one.
+  Future<void> _join() async {
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _InviteCodeDialog(),
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final family = await api.joinFamily(code);
+      api.setFamilyId(family.id);
+      await _remember(family);
+      await ref.read(familyIdProvider.notifier).set(family.id);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -95,12 +126,43 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           )
                         : const Text('Get started'),
                   ),
+                  if (ref.watch(sessionProvider).value != null)
+                    TextButton(
+                      onPressed: _saving ? null : _join,
+                      child: const Text('Join with an invite code'),
+                    ),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _InviteCodeDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final code = TextEditingController();
+    return AlertDialog(
+      title: const Text('Join a family'),
+      content: TextField(
+        controller: code,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Invite code'),
+        onSubmitted: (value) => Navigator.pop(context, value.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, code.text.trim()),
+          child: const Text('Join'),
+        ),
+      ],
     );
   }
 }

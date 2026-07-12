@@ -14,6 +14,9 @@ void main() {
         child: const DaybyApp(),
       ),
     );
+    // Startup asks the server whether anyone has to sign in first.
+    await tester.pumpAndSettle();
+
     expect(find.text('Welcome to Dayby'), findsOneWidget);
   });
 }

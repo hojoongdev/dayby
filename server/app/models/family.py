@@ -9,6 +9,10 @@ class FamilyCreate(BaseModel):
     name: str
 
 
+class FamilyJoin(BaseModel):
+    invite_code: str
+
+
 class FamilyOut(BaseModel):
     id: str
     name: str

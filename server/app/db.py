@@ -57,6 +57,11 @@ async def ensure_indexes() -> None:
     await db.events.create_index([("family_id", 1), ("baby_id", 1), ("time", -1)])
     await db.babies.create_index([("family_id", 1)])
     await db[f"{PHOTO_BUCKET}.files"].create_index([("metadata.family_id", 1)])
+    # Identity: one account per person per provider, and "which family am I in?"
+    # is asked on every authenticated request.
+    await db.users.create_index([("provider", 1), ("subject", 1)], unique=True)
+    await db.families.create_index([("members", 1)])
+    await db.families.create_index([("invite_code", 1)])
 
 
 async def close_client() -> None:

@@ -12,6 +12,9 @@ dependencies = [
     "google-genai>=1.0",
     # Multipart form parsing, for photo upload.
     "python-multipart>=0.0.9",
+    # Session tokens. (Verifying Google ID tokens rides on google-auth, which
+    # google-genai already brings in.)
+    "pyjwt>=2.9",
 ]
 
 [project.optional-dependencies]

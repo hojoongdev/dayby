@@ -1,16 +1,55 @@
-"""Shared FastAPI dependencies."""
+"""Shared FastAPI dependencies.
+
+get_current_family is the seam every route already depends on, so switching from
+"the caller names its family" to "the caller proves who it is" changes nothing
+above this file.
+"""
+from typing import Optional
+
 from fastapi import Header, HTTPException
 
+from .config import settings
 from .db import get_db
+from .tokens import ACCESS, read_token
 
 
-async def get_current_family(x_family_id: str = Header(..., alias="X-Family-Id")) -> dict:
-    """Resolve the caller's family.
+def _bearer(authorization: Optional[str]) -> str:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    return token
 
-    For now the family id comes from the X-Family-Id header. When auth lands (P4),
-    this dependency will derive the family from the session / JWT instead — every
-    route that depends on it stays unchanged.
-    """
+
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    user = await get_db().users.find_one({"_id": read_token(_bearer(authorization), ACCESS)})
+    if user is None:
+        raise HTTPException(status_code=401, detail="Unknown user")
+    return user
+
+
+async def get_current_family(
+    authorization: Optional[str] = Header(None),
+    x_family_id: Optional[str] = Header(None, alias="X-Family-Id"),
+) -> dict:
+    """The caller's family: derived from their session, or named outright in dev."""
+    if settings.auth_enabled:
+        user = await get_current_user(authorization)
+        family = await get_db().families.find_one({"members": user["_id"]})
+        if family is None:
+            raise HTTPException(
+                status_code=404, detail="Create a family or join one with an invite code"
+            )
+        return family
+
+    # No identity provider configured. The header names the family outright, which is
+    # a bypass, not a login -- so it exists in development and nowhere else.
+    if not settings.is_development:
+        raise HTTPException(
+            status_code=503, detail="No auth provider configured (set AUTH_PROVIDER)"
+        )
+    if not x_family_id:
+        raise HTTPException(status_code=401, detail="Missing X-Family-Id")
+
     family = await get_db().families.find_one({"_id": x_family_id})
     if family is None:
         raise HTTPException(status_code=404, detail="Unknown family")

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
+import 'auth.dart';
 import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
@@ -22,10 +23,96 @@ final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('overridden in main'),
 );
 
+final tokenStoreProvider = Provider<TokenStore>((ref) => const SecureTokenStore());
+
+/// A client with no session attached, for the three calls that cannot have one:
+/// asking whether a sign-in is needed, signing in, and refreshing. Separate from
+/// apiClientProvider, which needs a session and would therefore be a circle.
+final anonymousApiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
 final apiClientProvider = Provider<ApiClient>((ref) {
   final prefs = ref.watch(sharedPrefsProvider);
-  return ApiClient(familyId: prefs.getString(familyIdKey));
+  return ApiClient(
+    familyId: prefs.getString(familyIdKey),
+    tokens: ref.watch(sessionProvider).value?.tokens,
+    onTokensRefreshed: (tokens) => ref.read(tokenStoreProvider).write(tokens),
+  );
 });
+
+/// Whether this server asks anyone to sign in, and with what. A server that cannot
+/// be reached is treated as one that does not ask.
+final authConfigProvider = FutureProvider<AuthConfig>((ref) async {
+  try {
+    return await ref.watch(anonymousApiClientProvider).authConfig();
+  } catch (_) {
+    return const AuthConfig();
+  }
+});
+
+/// The signed-in session, restored from the keychain on launch. Null means signed
+/// out — which is also the answer when the server is not asking.
+class SessionNotifier extends AsyncNotifier<Session?> {
+  ApiClient get _anonymous => ref.read(anonymousApiClientProvider);
+
+  @override
+  Future<Session?> build() async {
+    // A server that never asks anyone to sign in has no session to restore, and
+    // there is no reason to open the keychain looking for one.
+    if (!(await ref.watch(authConfigProvider.future)).enabled) return null;
+
+    final store = ref.watch(tokenStoreProvider);
+    final stored = await store.read();
+    if (stored == null) return null;
+
+    try {
+      // The stored refresh token is the session. Trading it in gets a live access
+      // token back, and tells us which family this account ended up in.
+      return await _remember(await _anonymous.refreshSession(stored.refresh));
+    } catch (_) {
+      await store.clear();
+      return null;
+    }
+  }
+
+  Future<Session> _remember(Session session) async {
+    await ref.read(tokenStoreProvider).write(session.tokens);
+    final familyId = session.familyId;
+    if (familyId != null) {
+      await ref.read(familyIdProvider.notifier).set(familyId);
+    }
+    return session;
+  }
+
+  Future<void> signIn(String providerToken) async {
+    state = const AsyncLoading();
+    try {
+      state = AsyncData(await _remember(await _anonymous.signIn(providerToken)));
+    } catch (error, stack) {
+      state = AsyncError(error, stack);
+      rethrow; // the sign-in screen says what went wrong; the app stays put
+    }
+  }
+
+  Future<void> signOut() async {
+    await ref.read(tokenStoreProvider).clear();
+    await ref.read(familyIdProvider.notifier).clear();
+    state = const AsyncData(null);
+  }
+
+  /// After the family is created or joined, the session knows where it belongs.
+  void joinedFamily(String familyId) {
+    final session = state.value;
+    if (session == null) return;
+    state = AsyncData(Session(
+      tokens: session.tokens,
+      user: session.user,
+      familyId: familyId,
+    ));
+  }
+}
+
+final sessionProvider =
+    AsyncNotifierProvider<SessionNotifier, Session?>(SessionNotifier.new);
 
 class FamilyIdNotifier extends Notifier<String?> {
   @override
@@ -100,7 +187,10 @@ final liveEventsProvider = StreamProvider<Event>((ref) {
   final familyId = ref.watch(familyIdProvider);
   if (familyId == null) return const Stream<Event>.empty();
 
-  final connection = ref.watch(liveFeedProvider).connect(familyId);
+  final connection = ref.watch(liveFeedProvider).connect(
+        familyId,
+        token: ref.watch(sessionProvider).value?.tokens.access,
+      );
   ref.onDispose(connection.close);
   return connection.events;
 });

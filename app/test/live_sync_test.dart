@@ -17,7 +17,7 @@ class _FakeLiveFeed implements LiveFeed {
   void partnerLogs(Event event) => _controller.add(event);
 
   @override
-  LiveConnection connect(String familyId) => LiveConnection(
+  LiveConnection connect(String familyId, {String? token}) => LiveConnection(
         events: _controller.stream,
         close: _controller.close,
       );

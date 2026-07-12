@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../auth.dart';
 import '../config.dart';
 import '../models/event.dart';
 import '../models/family.dart';
@@ -9,12 +10,24 @@ import '../models/tip.dart';
 import '../models/wrapped.dart';
 
 class ApiClient {
-  ApiClient({String baseUrl = kApiBaseUrl, String? familyId})
-      : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+  ApiClient({
+    String baseUrl = kApiBaseUrl,
+    String? familyId,
+    AuthTokens? tokens,
+    this.onTokensRefreshed,
+  }) : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+    _tokens = tokens;
     setFamilyId(familyId);
+    _dio.interceptors.add(
+      InterceptorsWrapper(onRequest: _authorize, onError: _refreshAndRetry),
+    );
   }
 
   final Dio _dio;
+  AuthTokens? _tokens;
+
+  /// Called when a 401 was recovered by refreshing, so the new pair gets persisted.
+  final void Function(AuthTokens)? onTokensRefreshed;
 
   void setFamilyId(String? familyId) {
     if (familyId == null || familyId.isEmpty) {
@@ -24,8 +37,67 @@ class ApiClient {
     }
   }
 
+  void _authorize(RequestOptions options, RequestInterceptorHandler handler) {
+    final tokens = _tokens;
+    if (tokens != null) {
+      options.headers['Authorization'] = 'Bearer ${tokens.access}';
+    }
+    handler.next(options);
+  }
+
+  /// An access token lives half an hour, and a parent's session lives months. When
+  /// the short one lapses mid-request, renew it and let the request go through
+  /// rather than throwing the caregiver back to a sign-in screen.
+  Future<void> _refreshAndRetry(
+    DioException error,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final tokens = _tokens;
+    final failed = error.requestOptions;
+    if (error.response?.statusCode != 401 ||
+        tokens == null ||
+        failed.extra.containsKey('retried')) {
+      return handler.next(error);
+    }
+
+    try {
+      final renewed = await refreshSession(tokens.refresh);
+      _tokens = renewed.tokens;
+      onTokensRefreshed?.call(renewed.tokens);
+
+      failed.extra['retried'] = true;
+      failed.headers['Authorization'] = 'Bearer ${renewed.tokens.access}';
+      handler.resolve(await _dio.fetch<dynamic>(failed));
+    } on DioException {
+      // The refresh token is gone too: this really is a sign-in.
+      handler.next(error);
+    }
+  }
+
+  Future<AuthConfig> authConfig() async {
+    final res = await _dio.get('/auth/config');
+    return AuthConfig.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// Trade an identity provider's token for a Dayby session. With the mock
+  /// provider, the "token" is simply the email you claim to be.
+  Future<Session> signIn(String providerToken) async {
+    final res = await _dio.post('/auth/signin', data: {'token': providerToken});
+    return Session.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Session> refreshSession(String refreshToken) async {
+    final res = await _dio.post('/auth/refresh', data: {'refresh_token': refreshToken});
+    return Session.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<Family> createFamily(String name) async {
     final res = await _dio.post('/families', data: {'name': name});
+    return Family.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Family> joinFamily(String inviteCode) async {
+    final res = await _dio.post('/families/join', data: {'invite_code': inviteCode});
     return Family.fromJson(res.data as Map<String, dynamic>);
   }
 

@@ -35,6 +35,9 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-false}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-none}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-not-for-production-generate-a-real-one}
       APP_ENV: development
     depends_on:
       mongo:

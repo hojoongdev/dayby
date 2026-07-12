@@ -11,8 +11,8 @@ def test_create_family_and_babies(clean_db):
         fid = fam.json()["id"]
         assert fam.json()["invite_code"]
 
-        # A baby requires the family header.
-        assert c.post("/babies", json={"name": "Jiho"}).status_code == 422
+        # Naming no family at all is a missing credential, not a malformed request.
+        assert c.post("/babies", json={"name": "Jiho"}).status_code == 401
 
         baby = c.post(
             "/babies",

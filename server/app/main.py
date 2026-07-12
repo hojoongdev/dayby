@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import close_client, ensure_indexes, ping
-from .routers import assistant, events, families, ingest, live, photos, wrapped
+from .routers import assistant, auth, events, families, ingest, live, photos, wrapped
 
 logger = logging.getLogger("dayby")
 
@@ -34,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(families.router)
 app.include_router(ingest.router)
 app.include_router(events.router)

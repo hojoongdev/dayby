@@ -1,9 +1,19 @@
 """Family and baby management. All baby routes are scoped to the caller's family."""
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
 
+from fastapi import APIRouter, Depends, Header, HTTPException
+
+from ..config import settings
 from ..db import get_db
-from ..deps import get_current_family
-from ..models.family import BabyCreate, BabyOut, BabyUpdate, FamilyCreate, FamilyOut
+from ..deps import get_current_family, get_current_user
+from ..models.family import (
+    BabyCreate,
+    BabyOut,
+    BabyUpdate,
+    FamilyCreate,
+    FamilyJoin,
+    FamilyOut,
+)
 from ..util import invite_code, new_id, now
 
 router = APIRouter(tags=["families"])
@@ -20,16 +30,50 @@ def _baby_out(doc: dict) -> BabyOut:
     )
 
 
+def _family_out(doc: dict) -> FamilyOut:
+    return FamilyOut(id=doc["_id"], name=doc["name"], invite_code=doc["invite_code"])
+
+
 @router.post("/families", response_model=FamilyOut, status_code=201)
-async def create_family(body: FamilyCreate) -> FamilyOut:
+async def create_family(
+    body: FamilyCreate,
+    authorization: Optional[str] = Header(None),
+) -> FamilyOut:
+    """Start a family. Whoever creates it is its first member."""
+    members: list[str] = []
+    if settings.auth_enabled:
+        user_id = (await get_current_user(authorization))["_id"]
+        # A person belongs to one family, and that is the one every request
+        # resolves to. A second one would simply be unreachable.
+        if await get_db().families.find_one({"members": user_id}, {"_id": 1}):
+            raise HTTPException(status_code=409, detail="You are already in a family")
+        members = [user_id]
+
     doc = {
         "_id": new_id(),
         "name": body.name,
         "invite_code": invite_code(),
+        "members": members,
         "created_at": now(),
     }
     await get_db().families.insert_one(doc)
-    return FamilyOut(id=doc["_id"], name=doc["name"], invite_code=doc["invite_code"])
+    return _family_out(doc)
+
+
+@router.post("/families/join", response_model=FamilyOut)
+async def join_family(
+    body: FamilyJoin,
+    user: dict = Depends(get_current_user),
+) -> FamilyOut:
+    """The other half of the invite code the app has been showing all along."""
+    family = await get_db().families.find_one({"invite_code": body.invite_code.strip()})
+    if family is None:
+        raise HTTPException(status_code=404, detail="No family with that invite code")
+
+    await get_db().families.update_one(
+        {"_id": family["_id"]}, {"$addToSet": {"members": user["_id"]}}
+    )
+    return _family_out(family)
 
 
 @router.post("/babies", response_model=BabyOut, status_code=201)
