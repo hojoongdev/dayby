@@ -56,6 +56,24 @@ bool isToday(DateTime t) {
 /// "amount_ml" -> "amount ml"
 String prettifyKey(String key) => key.replaceAll('_', ' ');
 
+/// "1,031" — the numbers in a keepsake are big enough to need the commas.
+String formatCount(num n) {
+  final digits = n.round().toString();
+  final out = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
+    out.write(digits[i]);
+  }
+  return out.toString();
+}
+
+/// A lifetime of feeding is litres, not millilitres.
+String formatTotalVolume(double ml, UnitPrefs units) {
+  if (units.volume == 'oz') return '${formatCount(ml / 29.5735)} oz';
+  if (ml >= 1000) return '${(ml / 1000).toStringAsFixed(1)} L';
+  return '${formatCount(ml)} ml';
+}
+
 String _capitalize(String s) =>
     s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 

@@ -128,6 +128,50 @@ class AssistantTips(BaseModel):
     lang: str = "en"
 
 
+class Spend(BaseModel):
+    currency: str
+    total: float
+    count: int
+
+
+class Milestone(BaseModel):
+    time: datetime
+    text: Optional[str] = None
+
+
+class WrappedStats(BaseModel):
+    """A whole babyhood, counted. Every number comes from one aggregation pass."""
+
+    days_tracked: int = 0
+    total_events: int = 0
+    first_log: Optional[datetime] = None
+    last_log: Optional[datetime] = None
+
+    feedings: int = 0
+    total_feed_ml: float = 0
+    night_feeds: int = 0
+    diapers: int = 0
+    sleeps: int = 0
+
+    busiest_day: Optional[str] = None
+    busiest_day_events: int = 0
+    top_types: dict[str, int] = Field(default_factory=dict)
+    spend: list[Spend] = Field(default_factory=list)
+    milestones: list[Milestone] = Field(default_factory=list)
+
+    first_weight_kg: Optional[float] = None
+    last_weight_kg: Optional[float] = None
+    first_height_cm: Optional[float] = None
+    last_height_cm: Optional[float] = None
+
+
+class Wrapped(BaseModel):
+    stats: WrappedStats
+    # The model's retrospective, written from the numbers above and nothing else.
+    story: str = ""
+    lang: str = "en"
+
+
 class EventCreate(BaseModel):
     """A confirmed event to persist (after the user reviews the ingest result)."""
 

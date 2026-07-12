@@ -7,6 +7,7 @@ from ...models.events import (
     StructuredResult,
     Tip,
     UpcomingEvent,
+    WrappedStats,
 )
 
 
@@ -48,4 +49,9 @@ class LLMProvider(ABC):
         The signals are aggregated from the family's real logs and are the only
         facts available — the model writes the sentence, never the numbers.
         """
+        ...
+
+    @abstractmethod
+    async def write_wrapped(self, stats: WrappedStats, ctx: LlmContext) -> str:
+        """Tell a whole babyhood back to the parent, from the tally of it."""
         ...

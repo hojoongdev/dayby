@@ -11,6 +11,7 @@ from ...models.events import (
     CareSignal,
     LlmContext,
     UpcomingEvent,
+    WrappedStats,
 )
 
 
@@ -82,6 +83,32 @@ Rules:
 - Never diagnose and never give medical advice. For anything health-related, suggest
   consulting a pediatrician.
 - Output JSON only. No markdown fences, no commentary."""
+
+
+def build_wrapped_instruction(ctx: LlmContext, stats: WrappedStats) -> str:
+    profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
+    lang = ctx.lang or "the caregiver's language"
+    numbers = stats.model_dump_json(exclude_none=True)
+    return f"""You are writing a keepsake: a short retrospective of everything a family
+logged about their baby, to be read back to them years later.
+
+Baby profiles (name, age, sex): {profiles}
+The complete tally, counted from their own records:
+{numbers}
+
+Write 3 to 5 sentences, warm and specific, in this language: {lang}.
+
+Rules:
+- Use the numbers above, and ONLY those numbers. Never invent a count, a date, a
+  milestone or an amount. If a number is zero or missing, simply do not mention it.
+- Lead with the ones that will make them feel something -- the diapers changed, the
+  night feeds nobody saw, the day that was busiest -- not with a list of every field.
+- Say the numbers plainly; a big one is moving on its own and needs no decoration.
+- Write dates the way a person says them out loud, never as an ISO string. Same for
+  volumes: 135040 ml is "135 litres".
+- Speak to the parent, about their baby, by name. This is a memory, not a report.
+- No medical claims, no advice, no diagnosis.
+- Output the text only. No JSON, no markdown, no headings, no bullet points."""
 
 
 def build_photo_instruction(ctx: LlmContext) -> str:

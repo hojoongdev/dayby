@@ -8,6 +8,7 @@ import 'api/api_client.dart';
 import 'models/event.dart';
 import 'models/family.dart';
 import 'models/tip.dart';
+import 'models/wrapped.dart';
 import 'units.dart';
 
 const familyIdKey = 'family_id';
@@ -99,6 +100,14 @@ final photoProvider = FutureProvider.family<Uint8List, String>(
 /// nudge about a missing feed has to disappear the moment the feed is logged.
 final tipsProvider = FutureProvider.family<AssistantTips, String>(
   (ref, babyId) => ref.watch(apiClientProvider).tips(
+        babyId: babyId,
+        lang: ref.watch(voiceLangProvider),
+      ),
+);
+
+/// The lifetime retrospective for one baby.
+final wrappedProvider = FutureProvider.family<Wrapped, String>(
+  (ref, babyId) => ref.watch(apiClientProvider).wrapped(
         babyId: babyId,
         lang: ref.watch(voiceLangProvider),
       ),

@@ -19,12 +19,14 @@ from ...models.events import (
     StructuredResult,
     Tip,
     UpcomingEvent,
+    WrappedStats,
 )
 from .base import LLMProvider
 from .prompt import (
     build_photo_instruction,
     build_system_instruction,
     build_tips_instruction,
+    build_wrapped_instruction,
 )
 
 logger = logging.getLogger("dayby.gemini")
@@ -125,6 +127,22 @@ class GeminiLLMProvider(LLMProvider):
         except Exception:
             logger.exception("Gemini answer_query failed")
             return "Sorry, I couldn't look that up right now."
+
+    async def write_wrapped(self, stats: WrappedStats, ctx: LlmContext) -> str:
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents="Write the retrospective.",
+                config=types.GenerateContentConfig(
+                    system_instruction=build_wrapped_instruction(ctx, stats),
+                    temperature=0.8,  # it is a keepsake, not a report
+                ),
+            )
+            return (response.text or "").strip()
+        except Exception:
+            # The numbers are the keepsake; the story is the wrapping paper.
+            logger.exception("Gemini write_wrapped failed")
+            return ""
 
     async def proactive_tips(
         self,

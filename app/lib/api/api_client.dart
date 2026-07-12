@@ -6,6 +6,7 @@ import '../config.dart';
 import '../models/event.dart';
 import '../models/family.dart';
 import '../models/tip.dart';
+import '../models/wrapped.dart';
 
 class ApiClient {
   ApiClient({String baseUrl = kApiBaseUrl, String? familyId})
@@ -151,6 +152,16 @@ class ApiClient {
       'now': _localNowIso(),
     });
     return AssistantTips.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// The keepsake: everything ever logged for this baby, counted and told back.
+  Future<Wrapped> wrapped({required String babyId, String? lang}) async {
+    final res = await _dio.get('/wrapped', queryParameters: {
+      'baby_id': babyId,
+      'lang': ?lang,
+      'now': _localNowIso(),
+    });
+    return Wrapped.fromJson(res.data as Map<String, dynamic>);
   }
 
   String? _dateOnly(DateTime? d) => d == null

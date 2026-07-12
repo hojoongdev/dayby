@@ -17,6 +17,7 @@ from ...models.events import (
     StructuredResult,
     Tip,
     UpcomingEvent,
+    WrappedStats,
 )
 from .base import LLMProvider
 
@@ -92,6 +93,11 @@ class MockLLMProvider(LLMProvider):
                 text=f"Age tips for {who} need a real model.",
             ))
         return tips
+
+    async def write_wrapped(self, stats: WrappedStats, ctx: LlmContext) -> str:
+        # The story is the one part that has to be written; the app shows the
+        # numbers either way, so an empty story is an honest offline answer.
+        return ""
 
     async def structure_photo(
         self, image: bytes, mime_type: str, text: str, ctx: LlmContext

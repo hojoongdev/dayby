@@ -6,6 +6,7 @@ import '../api/api_client.dart';
 import '../format.dart';
 import '../models/family.dart';
 import '../providers.dart';
+import 'wrapped_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -14,7 +15,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final family = ref.watch(familyProvider);
     final babies = ref.watch(babiesProvider);
-    final activeId = ref.watch(activeBabyProvider)?.id;
+    final active = ref.watch(activeBabyProvider);
+    final activeId = active?.id;
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -60,6 +62,20 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Add a baby'),
             onTap: () => _babyForm(context, ref),
           ),
+          if (active != null) ...[
+            const _SectionHeader('Keepsake'),
+            ListTile(
+              leading: const Icon(Icons.auto_stories_outlined),
+              title: Text('Your story with ${active.name}'),
+              subtitle: const Text('Everything you ever logged, counted'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => WrappedScreen(baby: active),
+                ),
+              ),
+            ),
+          ],
           const _SectionHeader('Units'),
           const _UnitsSection(),
           const Divider(height: 32),
