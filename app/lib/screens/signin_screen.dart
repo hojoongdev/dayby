@@ -6,7 +6,7 @@ import '../providers.dart';
 import '../widgets/glass.dart';
 
 /// Sign in. Which provider is behind this is the server's business — the app only
-/// asks it for a token and hands it over.
+/// gets a token from it and hands it over, and the server is the one that checks it.
 ///
 /// With AUTH_PROVIDER=mock the token is simply the email you claim to be, so the
 /// whole session flow runs with no keys and no Google project.
@@ -24,21 +24,29 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _busy = false;
   String? _error;
 
+  bool get _google => widget.provider == 'google';
+
   @override
   void dispose() {
     _email.dispose();
     super.dispose();
   }
 
-  Future<void> _continue() async {
-    final email = _email.text.trim();
-    if (email.isEmpty || _busy) return;
+  Future<void> _signIn(Future<String?> Function() token) async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await ref.read(sessionProvider.notifier).signIn(email);
+      final providerToken = await token();
+      // Backed out of the Google sheet, or an empty box: not an error, just not
+      // signed in.
+      if (providerToken == null || providerToken.isEmpty) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+      await ref.read(sessionProvider.notifier).signIn(providerToken);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -74,45 +82,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                             color: theme.colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 24),
-                      TextField(
-                        controller: _email,
-                        enabled: !_busy,
-                        keyboardType: TextInputType.emailAddress,
-                        autofocus: true,
-                        onSubmitted: (_) => _continue(),
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
+                      if (_google) ..._googleSection(theme) else ..._emailSection(theme),
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: Text(_error!,
                               style: TextStyle(color: theme.colorScheme.error)),
-                        ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: _busy ? null : _continue,
-                          child: _busy
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Text('Continue'),
-                        ),
-                      ),
-                      if (widget.provider == 'mock')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            'Development sign-in: any email works, and signing in '
-                            'with the same one twice is the same account.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant),
-                          ),
                         ),
                     ],
                   ),
@@ -124,4 +99,67 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       ),
     );
   }
+
+  List<Widget> _googleSection(ThemeData theme) {
+    final google = ref.read(googleIdentityProvider);
+    if (!google.isAvailable) {
+      return [
+        Text(
+          'This server signs in with Google, but this build was not given a client '
+          'id. Rebuild with --dart-define=GOOGLE_CLIENT_ID=… (the same client the '
+          'server verifies against), on iOS or Android.',
+          style: theme.textTheme.bodyMedium,
+        ),
+      ];
+    }
+    return [
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _busy ? null : () => _signIn(google.idToken),
+          icon: _busy ? _spinner() : const Icon(Icons.g_mobiledata, size: 28),
+          label: const Text('Continue with Google'),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _emailSection(ThemeData theme) {
+    return [
+      TextField(
+        controller: _email,
+        enabled: !_busy,
+        keyboardType: TextInputType.emailAddress,
+        autofocus: true,
+        onSubmitted: (_) => _signIn(() async => _email.text.trim()),
+        decoration: const InputDecoration(
+          labelText: 'Email',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 20),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: _busy ? null : () => _signIn(() async => _email.text.trim()),
+          child: _busy ? _spinner() : const Text('Continue'),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(
+          'Development sign-in: any email works, and signing in with the same one '
+          'twice is the same account.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ),
+    ];
+  }
+
+  Widget _spinner() => const SizedBox(
+        height: 18,
+        width: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
 }

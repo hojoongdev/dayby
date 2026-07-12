@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api/api_client.dart';
 import 'app_lock.dart';
 import 'auth.dart';
+import 'google.dart';
 import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
@@ -187,6 +188,9 @@ final liveFeedProvider = Provider<LiveFeed>((ref) => const WebSocketLiveFeed());
 final remindersProvider = Provider<Reminders>((ref) => LocalReminders());
 
 final appLockProvider = Provider<AppLock>((ref) => BiometricAppLock());
+
+final googleIdentityProvider =
+    Provider<GoogleIdentity>((ref) => RealGoogleIdentity());
 
 /// Whether this device can ask for a face or a fingerprint at all.
 final biometricsAvailableProvider =

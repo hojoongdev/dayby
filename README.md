@@ -72,6 +72,14 @@ so the whole pipeline runs offline.
 MongoDB comes up as a single-node **replica set**. That is not about redundancy — it is
 what change streams need, and change streams are how the live family sync works.
 
+To sign in with a real Google account rather than the mock, both halves need the same
+OAuth client — the server verifies what the app was issued:
+
+```bash
+AUTH_PROVIDER=google GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com docker compose up
+cd app && flutter run --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+```
+
 ## Design highlights
 
 - **Provider abstraction, mock first.** STT and LLM sit behind interfaces with at least
