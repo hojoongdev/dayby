@@ -6,7 +6,16 @@ confirms and posts to /events.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 
 from ..context import build_llm_context
 from ..db import get_db
@@ -28,6 +37,9 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 # How far back to look for the record a correction refers to.
 TARGET_CANDIDATES = 30
+
+# A sentence, not a podcast. Gemini takes audio inline up to about this much.
+MAX_AUDIO_BYTES = 16 * 1024 * 1024
 
 
 async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
@@ -113,18 +125,37 @@ async def ingest_voice(
     request: Request,
     family: dict = Depends(get_current_family),
     lang: Optional[str] = None,
+    at: Optional[datetime] = Query(None, alias="now"),
 ) -> IngestVoiceResponse:
     """Transcribe raw audio (the request body) then structure it, like /text.
 
-    The audio is the raw request body (Content-Type e.g. audio/wav); this keeps
-    the endpoint dependency-free. STT sits behind the provider interface, so the
-    mock runs offline and a real cloud/Gemini transcriber drops in later.
+    The audio is the raw request body (Content-Type e.g. audio/wav); this keeps the
+    endpoint dependency-free. `lang` is only a hint — the real transcriber returns
+    whatever language was actually spoken. `now` is the caller's local time, without
+    which "at eight this morning" lands eight hours into a UTC morning nobody lives in.
     """
     audio = await request.body()
     if not audio:
         raise HTTPException(status_code=400, detail="Empty audio body")
-    transcript = await get_stt_provider().transcribe(audio, lang)
-    ctx = await build_llm_context(family, now(), lang)
+    if len(audio) > MAX_AUDIO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Recording is too long (max {MAX_AUDIO_BYTES // (1024 * 1024)} MB)",
+        )
+
+    mime_type = (request.headers.get("content-type") or "").split(";")[0].strip()
+    if not mime_type.startswith("audio/"):
+        raise HTTPException(
+            status_code=415, detail=f"Not an audio recording: {mime_type or 'unknown'}"
+        )
+
+    transcript = await get_stt_provider().transcribe(audio, mime_type, lang)
+    if not transcript.strip():
+        raise HTTPException(
+            status_code=422, detail="I couldn't make that out — say it again?"
+        )
+
+    ctx = await build_llm_context(family, at or now(), lang)
     result = await get_llm_provider().structure_log(transcript, ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     result = await _find_target(result, family, ctx, transcript)

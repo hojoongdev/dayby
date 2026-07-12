@@ -19,6 +19,11 @@ def get_llm_provider() -> LLMProvider:
 
 
 def get_stt_provider() -> STTProvider:
-    if settings.stt_provider == "mock":
+    name = settings.stt_provider
+    if name == "mock":
         return MockSTTProvider()
-    raise ValueError(f"Unknown STT_PROVIDER: {settings.stt_provider!r}")
+    if name == "gemini":
+        from .stt.gemini import GeminiSTTProvider
+
+        return GeminiSTTProvider()
+    raise ValueError(f"Unknown STT_PROVIDER: {name!r}")

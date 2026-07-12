@@ -42,8 +42,9 @@ Every API key (LLM / STT) lives **only on the server** — never in the app.
 | iOS integration | Swift + App Intents / WidgetKit | Shortcuts, Action button, widgets |
 | Server | Python + FastAPI | async |
 | Database | MongoDB (async PyMongo) | flexible document schema is the point |
-| STT | provider abstraction | mock / cloud / multimodal, swappable |
-| LLM | provider abstraction | mock / hosted, swappable |
+| STT | provider abstraction | mock / Gemini audio, swappable |
+| LLM | provider abstraction | mock / Gemini, swappable |
+| Auth | provider abstraction | mock / Google, swappable |
 
 ## Status
 
@@ -92,6 +93,10 @@ what change streams need, and change streams are how the live family sync works.
 - **Mock-first everywhere, including identity.** `AUTH_PROVIDER=mock` runs the whole
   sign-in flow — session, refresh, family membership — with no Google project, exactly
   like the LLM and STT providers. Real providers slot in behind the same interface.
+- **No language to choose.** `POST /ingest/voice` transcribes with Gemini audio, which
+  is told nothing about the language and returns whatever was actually said — Korean,
+  English, or a switch mid-sentence. On-device recognition has to be handed a locale
+  first, which is the only reason the app still carries a KO/EN toggle.
 
 ## Repository layout
 
