@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../config.dart';
 import '../models/event.dart';
 import '../models/family.dart';
+import '../models/tip.dart';
 
 class ApiClient {
   ApiClient({String baseUrl = kApiBaseUrl, String? familyId})
@@ -105,6 +106,16 @@ class ApiClient {
     return (res.data as List)
         .map((e) => Event.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// What the assistant would say right now, unprompted.
+  Future<AssistantTips> tips({required String babyId, String? lang}) async {
+    final res = await _dio.get('/assistant/tips', queryParameters: {
+      'baby_id': babyId,
+      'lang': ?lang,
+      'now': _localNowIso(),
+    });
+    return AssistantTips.fromJson(res.data as Map<String, dynamic>);
   }
 
   String? _dateOnly(DateTime? d) => d == null

@@ -11,9 +11,17 @@ from google import genai
 from google.genai import types
 
 from ...config import settings
-from ...models.events import Confidence, LlmContext, StructuredEvent, StructuredResult
+from ...models.events import (
+    CareSignal,
+    Confidence,
+    LlmContext,
+    StructuredEvent,
+    StructuredResult,
+    Tip,
+    UpcomingEvent,
+)
 from .base import LLMProvider
-from .prompt import build_system_instruction
+from .prompt import build_system_instruction, build_tips_instruction
 
 logger = logging.getLogger("dayby.gemini")
 
@@ -82,3 +90,28 @@ class GeminiLLMProvider(LLMProvider):
         except Exception:
             logger.exception("Gemini answer_query failed")
             return "Sorry, I couldn't look that up right now."
+
+    async def proactive_tips(
+        self,
+        signals: list[CareSignal],
+        upcoming: list[UpcomingEvent],
+        ctx: LlmContext,
+    ) -> list[Tip]:
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents="Write today's tips.",
+                config=types.GenerateContentConfig(
+                    system_instruction=build_tips_instruction(ctx, signals, upcoming),
+                    response_mime_type="application/json",
+                    # Warmer than structuring: the same three sentences every hour
+                    # would stop being worth reading.
+                    temperature=0.6,
+                ),
+            )
+            data = json.loads((response.text or "{}").strip())
+            return [Tip.model_validate(t) for t in data.get("tips", [])][:3]
+        except Exception:
+            # Tips are a bonus surface: on failure the card simply does not appear.
+            logger.exception("Gemini proactive_tips failed")
+            return []

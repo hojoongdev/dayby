@@ -15,3 +15,11 @@ async def get_current_family(x_family_id: str = Header(..., alias="X-Family-Id")
     if family is None:
         raise HTTPException(status_code=404, detail="Unknown family")
     return family
+
+
+async def require_baby(family: dict, baby_id: str) -> dict:
+    """The baby, or 404 if it does not belong to this family."""
+    baby = await get_db().babies.find_one({"_id": baby_id, "family_id": family["_id"]})
+    if baby is None:
+        raise HTTPException(status_code=404, detail="Baby not found in this family")
+    return baby

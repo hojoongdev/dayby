@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api/api_client.dart';
 import 'models/event.dart';
 import 'models/family.dart';
+import 'models/tip.dart';
 import 'units.dart';
 
 const familyIdKey = 'family_id';
@@ -79,6 +80,15 @@ final activeBabyProvider = Provider<Baby?>((ref) {
 /// Timeline for one baby, newest first. Invalidate to refetch after a save.
 final eventsProvider = FutureProvider.family<List<Event>, String>(
   (ref, babyId) => ref.watch(apiClientProvider).listEvents(babyId: babyId),
+);
+
+/// The assistant's proactive lines for one baby. Invalidated on every save: a
+/// nudge about a missing feed has to disappear the moment the feed is logged.
+final tipsProvider = FutureProvider.family<AssistantTips, String>(
+  (ref, babyId) => ref.watch(apiClientProvider).tips(
+        babyId: babyId,
+        lang: ref.watch(voiceLangProvider),
+      ),
 );
 
 /// Spoken language for voice input ("ko" | "en"). Sets the STT locale and the

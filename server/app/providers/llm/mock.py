@@ -10,15 +10,21 @@ from datetime import datetime
 
 from ...models.events import (
     Action,
+    CareSignal,
     Confidence,
     LlmContext,
     StructuredEvent,
     StructuredResult,
+    Tip,
+    UpcomingEvent,
 )
 from .base import LLMProvider
 
 _NUMBER = re.compile(r"(\d+(?:\.\d+)?)")
 _QUESTION_HINTS = ("?", "when ", "how much", "how many", "how long", "last ", "total")
+
+# Gaps (in hours) that start to look like a missed log rather than a quiet stretch.
+_OVERDUE_AFTER = {"feeding": 4.0, "diaper": 3.0, "sleep": 6.0}
 
 
 def _first_number(text: str) -> int | float | None:
@@ -38,6 +44,54 @@ class MockLLMProvider(LLMProvider):
         # Offline stand-in: real answering needs a real model. Give a truthful
         # fallback that still reflects the data size.
         return f"I have {len(events)} logged events, but I need a real model to answer that."
+
+    async def proactive_tips(
+        self,
+        signals: list[CareSignal],
+        upcoming: list[UpcomingEvent],
+        ctx: LlmContext,
+    ) -> list[Tip]:
+        # Nudges and reminders are arithmetic on real signals, so the mock gets those
+        # right offline. The age tip is knowledge, so it stays honest about needing
+        # a real model.
+        tips: list[Tip] = []
+
+        overdue = [
+            s for s in signals
+            if s.hours_since is not None
+            and s.hours_since >= _OVERDUE_AFTER.get(s.type, float("inf"))
+        ]
+        if overdue:
+            worst = max(overdue, key=lambda s: s.hours_since or 0)
+            tips.append(Tip(
+                kind="nudge",
+                topic=worst.type,
+                text=f"It has been {worst.hours_since} hours since the last {worst.type}.",
+            ))
+
+        if upcoming:
+            soonest = upcoming[0]
+            label = soonest.label or soonest.type
+            tips.append(Tip(
+                kind="nudge",
+                topic=soonest.type,
+                text=f"Coming up in {soonest.hours_until} hours: {label}.",
+            ))
+
+        if not signals:
+            tips.append(Tip(
+                kind="tip",
+                topic="getting-started",
+                text='Nothing logged yet — try "120 ml formula" to start.',
+            ))
+        else:
+            who = ctx.baby_profiles[0] if ctx.baby_profiles else "your baby"
+            tips.append(Tip(
+                kind="tip",
+                topic="development",
+                text=f"Age tips for {who} need a real model.",
+            ))
+        return tips
 
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
         lower = text.lower().strip()

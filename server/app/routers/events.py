@@ -2,10 +2,10 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from ..db import get_db
-from ..deps import get_current_family
+from ..deps import get_current_family, require_baby
 from ..models.events import EventCreate, EventOut
 from ..util import new_id, now
 
@@ -26,18 +26,12 @@ def _event_out(doc: dict) -> EventOut:
     )
 
 
-async def _require_baby(family: dict, baby_id: str) -> None:
-    baby = await get_db().babies.find_one({"_id": baby_id, "family_id": family["_id"]})
-    if baby is None:
-        raise HTTPException(status_code=404, detail="Baby not found in this family")
-
-
 @router.post("", response_model=EventOut, status_code=201)
 async def create_event(
     body: EventCreate,
     family: dict = Depends(get_current_family),
 ) -> EventOut:
-    await _require_baby(family, body.baby_id)
+    await require_baby(family, body.baby_id)
     doc = {
         "_id": new_id(),
         "family_id": family["_id"],

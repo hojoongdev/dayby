@@ -78,6 +78,45 @@ class IngestVoiceResponse(BaseModel):
     result: StructuredResult
 
 
+class CareSignal(BaseModel):
+    """One event type's recent history, aggregated from the family's real logs.
+
+    These are the facts a proactive tip is allowed to lean on: the model writes the
+    sentence, but never the numbers.
+    """
+
+    type: str
+    last_time: Optional[datetime] = None
+    hours_since: Optional[float] = None
+    count_today: int = 0
+    total: int = 0
+
+
+class UpcomingEvent(BaseModel):
+    """A logged event still ahead of us: an appointment, a todo with a due date."""
+
+    type: str
+    time: datetime
+    hours_until: float
+    label: Optional[str] = None
+
+
+class Tip(BaseModel):
+    """A short proactive line the assistant says before being asked."""
+
+    # "nudge" = something looks overdue; "tip" = age-appropriate guidance.
+    kind: str = "tip"
+    topic: Optional[str] = None
+    text: str
+
+
+class AssistantTips(BaseModel):
+    tips: list[Tip] = Field(default_factory=list)
+    signals: list[CareSignal] = Field(default_factory=list)
+    upcoming: list[UpcomingEvent] = Field(default_factory=list)
+    lang: str = "en"
+
+
 class EventCreate(BaseModel):
     """A confirmed event to persist (after the user reviews the ingest result)."""
 

@@ -4,7 +4,84 @@ Written in English (repo rule), but it explicitly tells the model to accept inpu
 in ANY language (English, Korean, ...) and set the "lang" field accordingly. That
 is how Korean input works without any Korean text in the source.
 """
-from ...models.events import STANDARD_EVENT_TYPES, LlmContext
+from datetime import tzinfo
+
+from ...models.events import (
+    STANDARD_EVENT_TYPES,
+    CareSignal,
+    LlmContext,
+    UpcomingEvent,
+)
+
+
+def format_signals(signals: list[CareSignal]) -> str:
+    """The aggregated care history, as compact lines the model can quote from."""
+    if not signals:
+        return "(nothing logged yet)"
+    lines = []
+    for s in signals:
+        parts = [f"- {s.type}:"]
+        if s.hours_since is not None:
+            parts.append(f"last {s.hours_since}h ago")
+        if s.count_today:
+            parts.append(f"{s.count_today} today")
+        parts.append(f"{s.total} logged in total")
+        lines.append(" ".join(parts))
+    return "\n".join(lines)
+
+
+def format_upcoming(upcoming: list[UpcomingEvent], tz: tzinfo | None) -> str:
+    """Scheduled times, already converted to the caller's clock.
+
+    Stored times are UTC. Handing the model a "Z" timestamp invites it to read the
+    UTC hour as the local one ("tomorrow morning" for a 4pm checkup), so the
+    conversion happens here rather than in the prompt.
+    """
+    if not upcoming:
+        return "(nothing scheduled)"
+    return "\n".join(
+        f"- {u.type}: in {u.hours_until}h ({u.time.astimezone(tz).isoformat()})"
+        + (f" — {u.label}" if u.label else "")
+        for u in upcoming
+    )
+
+
+def build_tips_instruction(
+    ctx: LlmContext, signals: list[CareSignal], upcoming: list[UpcomingEvent]
+) -> str:
+    profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
+    lang = ctx.lang or "the caregiver's language"
+    return f"""You are a warm baby-care assistant that speaks FIRST, before being asked.
+
+Current time (ISO 8601, the caller's local time with UTC offset): {ctx.now.isoformat()}
+Baby profiles (name, age, sex): {profiles}
+
+Care signals, aggregated from this family's real logs:
+{format_signals(signals)}
+
+Coming up (already in the caller's local time):
+{format_upcoming(upcoming, ctx.now.tzinfo)}
+
+Write at most 3 short lines, each one sentence:
+- At most ONE "nudge": something that looks overdue or missing given the signals and the
+  baby's age (e.g. a long gap since the last feed). Only if the signals actually support it.
+- A reminder of anything under "Coming up" that is close enough to matter.
+- One or two "tip" lines: age-appropriate care or development guidance for this baby's age.
+
+Return ONLY a JSON object:
+{{"tips": [{{"kind": "nudge | tip", "topic": "<feeding|sleep|diaper|growth|development|...>",
+            "text": "<one short, warm sentence>"}}]}}
+
+Rules:
+- Write every "text" in this language: {lang}. Keep it natural and warm, never clinical.
+- The facts above are the only ones you have. Never invent a number, a time, or an event
+  that is not there. If a type was never logged, you may gently suggest logging it.
+- The times above are already the caller's local time. Say them the way a person would
+  ("in about two hours", "tomorrow at 4"); never shift them.
+- If nothing looks overdue, do not force a nudge — tips alone are fine.
+- Never diagnose and never give medical advice. For anything health-related, suggest
+  consulting a pediatrician.
+- Output JSON only. No markdown fences, no commentary."""
 
 
 def build_system_instruction(ctx: LlmContext) -> str:

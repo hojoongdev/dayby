@@ -5,6 +5,7 @@ import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
 import '../providers.dart';
+import '../widgets/assistant_card.dart';
 import '../widgets/glass.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -44,6 +45,7 @@ class _Dashboard extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(eventsProvider(baby.id));
+        ref.invalidate(tipsProvider(baby.id));
         await ref.read(eventsProvider(baby.id).future);
       },
       child: eventsAsync.when(
@@ -94,6 +96,7 @@ class _Dashboard extends ConsumerWidget {
             ],
           ),
         ),
+        AssistantCard(babyId: baby.id),
         _StatCard(
           icon: Icons.local_drink_outlined,
           label: 'Last feeding',

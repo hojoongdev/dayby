@@ -224,6 +224,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   void _afterSave(Event saved) {
     final units = ref.read(unitPrefsProvider);
     ref.invalidate(eventsProvider(saved.babyId));
+    // The new event may be exactly what the assistant was nudging about.
+    ref.invalidate(tipsProvider(saved.babyId));
     setState(() {
       _saving = false;
       _pending = null;

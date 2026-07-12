@@ -1,7 +1,13 @@
 """LLM provider interface."""
 from abc import ABC, abstractmethod
 
-from ...models.events import LlmContext, StructuredResult
+from ...models.events import (
+    CareSignal,
+    LlmContext,
+    StructuredResult,
+    Tip,
+    UpcomingEvent,
+)
 
 
 class LLMProvider(ABC):
@@ -18,4 +24,18 @@ class LLMProvider(ABC):
         self, question: str, events: list[dict], ctx: LlmContext
     ) -> str:
         """Answer a natural-language question grounded ONLY in the given events."""
+        ...
+
+    @abstractmethod
+    async def proactive_tips(
+        self,
+        signals: list[CareSignal],
+        upcoming: list[UpcomingEvent],
+        ctx: LlmContext,
+    ) -> list[Tip]:
+        """Speak first: what the caregiver should hear before they ask.
+
+        The signals are aggregated from the family's real logs and are the only
+        facts available — the model writes the sentence, never the numbers.
+        """
         ...
