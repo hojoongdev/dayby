@@ -152,7 +152,8 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen> {
           _Card(
             title: 'The longest day',
             child: Text(
-              '${s.busiestDay} · ${formatCount(s.busiestDayEvents)} logs',
+              '${formatDate(DateTime.parse(s.busiestDay!))}'
+              ' · ${formatCount(s.busiestDayEvents)} logs',
               style: theme.textTheme.titleMedium,
             ),
           ),

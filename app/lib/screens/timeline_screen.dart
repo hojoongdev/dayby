@@ -6,6 +6,7 @@ import '../models/event.dart';
 import '../providers.dart';
 import '../units.dart';
 import '../widgets/event_tile.dart';
+import '../widgets/glass.dart';
 
 class TimelineScreen extends ConsumerStatefulWidget {
   const TimelineScreen({super.key});
@@ -38,10 +39,21 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   Widget build(BuildContext context) {
     final active = ref.watch(activeBabyProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Timeline')),
-      body: active == null
-          ? const Center(child: Text('Add a baby in Settings first.'))
-          : _body(active.id),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('Timeline'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: active == null
+                ? const Center(child: Text('Add a baby in Settings first.'))
+                : _body(active.id),
+          ),
+        ],
+      ),
     );
   }
 

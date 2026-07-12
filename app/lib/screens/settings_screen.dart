@@ -6,6 +6,7 @@ import '../api/api_client.dart';
 import '../format.dart';
 import '../models/family.dart';
 import '../providers.dart';
+import '../widgets/glass.dart';
 import 'wrapped_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -21,9 +22,16 @@ class SettingsScreen extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        children: [
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('Settings'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: Stack(children: [
+        const Positioned.fill(child: GlassBackground()),
+        SafeArea(
+          child: ListView(
+            children: [
           if (family != null) _FamilyCard(name: family.name, code: family.code),
           const _SectionHeader('Babies'),
           babies.when(
@@ -94,8 +102,10 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Forget this family on this device'),
             onTap: () => _confirmReset(context, ref),
           ),
-        ],
-      ),
+            ],
+          ),
+        ),
+      ]),
     );
   }
 
@@ -161,10 +171,10 @@ class _FamilyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
+    return GlassCard(
       margin: const EdgeInsets.all(16),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

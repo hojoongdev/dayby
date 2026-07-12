@@ -27,12 +27,15 @@ String formatDate(DateTime t) {
   return '${_months[l.month - 1]} ${l.day}, ${l.year}';
 }
 
-/// "just now" / "45m ago" / "2h 10m ago" / "3d ago"
+/// "just now" / "45m ago" / "2h 10m ago" / "4h ago" / "3d ago"
 String formatAgo(DateTime t) {
   final d = DateTime.now().difference(t);
   if (d.inMinutes < 1) return 'just now';
   if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-  if (d.inHours < 24) return '${d.inHours}h ${d.inMinutes % 60}m ago';
+  if (d.inHours < 24) {
+    final minutes = d.inMinutes % 60;
+    return minutes == 0 ? '${d.inHours}h ago' : '${d.inHours}h ${minutes}m ago';
+  }
   return '${d.inDays}d ago';
 }
 
