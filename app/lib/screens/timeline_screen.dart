@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../format.dart';
 import '../models/event.dart';
 import '../providers.dart';
+import '../units.dart';
 import '../widgets/event_tile.dart';
 
 class TimelineScreen extends ConsumerStatefulWidget {
@@ -143,14 +144,50 @@ class _FilterBar extends StatelessWidget {
   String _cap(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }
 
-class _EventList extends StatelessWidget {
+class _EventList extends ConsumerWidget {
   const _EventList(this.events);
 
   final List<Event> events;
 
+  /// Swiping is easy to do by accident with a baby in the other arm, so it asks.
+  Future<bool> _confirm(BuildContext context, Event event, UnitPrefs units) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this?'),
+        content: Text(
+          '${eventSummary(event.type, event.subtype, event.fields, units: units)}'
+          '\n${formatTime(event.time)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    return yes ?? false;
+  }
+
+  Future<void> _delete(WidgetRef ref, Event event) async {
+    await ref.read(apiClientProvider).deleteEvent(event.id);
+    ref.invalidate(eventsProvider(event.babyId));
+    ref.invalidate(tipsProvider(event.babyId));
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
+    final units = ref.watch(unitPrefsProvider);
     final rows = <Object>[];
     String? header;
     for (final e in events) {
@@ -178,7 +215,21 @@ class _EventList extends StatelessWidget {
             ),
           );
         }
-        return EventTile(row as Event);
+        final event = row as Event;
+        return Dismissible(
+          key: ValueKey(event.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: Theme.of(context).colorScheme.errorContainer,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 24),
+            child: Icon(Icons.delete_outline,
+                color: Theme.of(context).colorScheme.onErrorContainer),
+          ),
+          confirmDismiss: (_) => _confirm(context, event, units),
+          onDismissed: (_) => _delete(ref, event),
+          child: EventTile(event),
+        );
       },
     );
   }

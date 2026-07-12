@@ -6,6 +6,7 @@ GOOGLE_GENAI_USE_VERTEXAI=true to use a Vertex AI Express api key.
 """
 import json
 import logging
+from typing import Optional
 
 from google import genai
 from google.genai import types
@@ -25,6 +26,7 @@ from .base import LLMProvider
 from .prompt import (
     build_photo_instruction,
     build_system_instruction,
+    build_target_instruction,
     build_tips_instruction,
     build_wrapped_instruction,
 )
@@ -127,6 +129,32 @@ class GeminiLLMProvider(LLMProvider):
         except Exception:
             logger.exception("Gemini answer_query failed")
             return "Sorry, I couldn't look that up right now."
+
+    async def resolve_target(
+        self, hint: str, candidates: list[dict], ctx: LlmContext
+    ) -> Optional[int]:
+        listing = "\n".join(
+            f"{i}. {json.dumps(c, ensure_ascii=False, default=str)}"
+            for i, c in enumerate(candidates)
+        )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=f"Recent records, newest first:\n{listing}",
+                config=types.GenerateContentConfig(
+                    system_instruction=build_target_instruction(ctx, hint),
+                    response_mime_type="application/json",
+                    temperature=0.0,  # picking a record is not a creative act
+                ),
+            )
+            index = json.loads((response.text or "{}").strip()).get("index")
+            if isinstance(index, int) and 0 <= index < len(candidates):
+                return index
+            return None
+        except Exception:
+            # Not knowing which record they meant is a fine answer; guessing is not.
+            logger.exception("Gemini resolve_target failed")
+            return None
 
     async def write_wrapped(self, stats: WrappedStats, ctx: LlmContext) -> str:
         try:

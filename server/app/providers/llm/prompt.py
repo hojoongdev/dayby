@@ -85,6 +85,30 @@ Rules:
 - Output JSON only. No markdown fences, no commentary."""
 
 
+def build_target_instruction(ctx: LlmContext, hint: str) -> str:
+    """Which already-logged record does "the last feeding" mean?
+
+    The model picks from a numbered list of real records rather than naming one, so
+    the worst it can do is pick the wrong one -- and the caregiver is shown which
+    one it picked before anything happens to it.
+    """
+    return f"""The caregiver wants to change or remove something they logged earlier.
+
+They said: "{hint}"
+Current time (the caller's local time, with offset): {ctx.now.isoformat()}
+
+You will be given their recent records, newest first, each with a number.
+
+Return ONLY: {{"index": <the number of the record they mean, or null>}}
+
+Rules:
+- Match on what they said: the kind of record, the amount, roughly when.
+- "The last feeding" means the most recent record of that kind, and nothing else.
+- Times are shown in the caller's local time. Do not shift them.
+- If two records fit equally well, or none does, return null. A wrong guess is worse
+  than asking, because the caregiver is about to confirm a change to whatever you pick."""
+
+
 def build_wrapped_instruction(ctx: LlmContext, stats: WrappedStats) -> str:
     profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
     lang = ctx.lang or "the caregiver's language"
@@ -172,6 +196,15 @@ Rules:
 - The utterance may be in ANY language (English, Korean, ...). Detect it and set "lang".
   Keep "note" and "reply" in the original language (Korean stays Korean); "reply" is one warm sentence.
 - A question ("when was the last feeding?") is action=query with an empty events list.
+- Fixing something already logged ("actually it was 150", "that feed was at 8, not 9") is
+  action=update: describe the record they mean in "target_hint", and put the corrected values
+  in a single event. Only what changed has to be there — the rest of the record is left alone.
+  Leave "time" null unless the time is the thing being corrected: fixing an amount must not
+  move the record to now.
+- Taking something back ("delete the last diaper", "scratch that") is action=delete, with
+  "target_hint" and no events. Say in "reply" what you are about to remove, and ask.
+- update and delete only ever refer to something already logged. If the utterance is really a
+  new record, it is action=create, however it is phrased.
 - If the caregiver asks to change a unit/setting ("use Fahrenheit", "log feeds in ounces",
   "무게는 파운드로 보여줘"), set "settings" with the changed keys and leave events empty. Still write a
   "reply" confirming the change.

@@ -53,3 +53,12 @@ async def load_photo(photo_id: str, family_id: str) -> tuple[bytes, str]:
 
     stream = await get_photo_bucket().open_download_stream(photo_id)
     return await stream.read(), metadata["content_type"]
+
+
+async def delete_photo(photo_id: str, family_id: str) -> None:
+    """Deleting the record deletes the picture with it. Quiet if there is nothing
+    to delete: this runs behind an event delete that has already succeeded."""
+    doc = await get_db()[f"{PHOTO_BUCKET}.files"].find_one({"_id": photo_id})
+    if not doc or (doc.get("metadata") or {}).get("family_id") != family_id:
+        return
+    await get_photo_bucket().delete(photo_id)

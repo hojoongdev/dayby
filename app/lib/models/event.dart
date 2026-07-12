@@ -86,6 +86,7 @@ class StructuredResult {
     this.action = 'create',
     this.babyRef,
     this.events = const [],
+    this.target,
     this.needsClarification,
     this.reply,
     this.settings,
@@ -95,6 +96,12 @@ class StructuredResult {
   final String action;
   final String? babyRef;
   final List<StructuredEvent> events;
+
+  /// For a correction or a removal: the record the server found in the real
+  /// timeline. Null means it could not tell which one was meant — and then nothing
+  /// is offered, because the wrong guess would be applied to a real record.
+  final Event? target;
+
   final String? needsClarification;
 
   /// A short spoken confirmation the model wrote in the caller's language.
@@ -104,6 +111,9 @@ class StructuredResult {
   final Map<String, dynamic>? settings;
   final String lang;
 
+  bool get isUpdate => action == 'update';
+  bool get isDelete => action == 'delete';
+
   factory StructuredResult.fromJson(Map<String, dynamic> json) =>
       StructuredResult(
         action: json['action'] as String? ?? 'create',
@@ -111,6 +121,9 @@ class StructuredResult {
         events: (json['events'] as List? ?? const [])
             .map((e) => StructuredEvent.fromJson(e as Map<String, dynamic>))
             .toList(),
+        target: json['target'] == null
+            ? null
+            : Event.fromJson(json['target'] as Map<String, dynamic>),
         needsClarification: json['needs_clarification'] as String?,
         reply: json['reply'] as String?,
         settings: (json['settings'] as Map?)?.cast<String, dynamic>(),

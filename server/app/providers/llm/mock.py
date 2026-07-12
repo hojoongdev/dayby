@@ -23,6 +23,8 @@ from .base import LLMProvider
 
 _NUMBER = re.compile(r"(\d+(?:\.\d+)?)")
 _QUESTION_HINTS = ("?", "when ", "how much", "how many", "how long", "last ", "total")
+_DELETE_HINTS = ("delete", "remove", "undo", "scratch that")
+_EDIT_HINTS = ("change", "correct", "actually", "make it", "fix")
 
 # Gaps (in hours) that start to look like a missed log rather than a quiet stretch.
 _OVERDUE_AFTER = {"feeding": 4.0, "diaper": 3.0, "sleep": 6.0}
@@ -117,9 +119,38 @@ class MockLLMProvider(LLMProvider):
         result.reply = f"Photo saved. {result.reply or ''}".strip()
         return result
 
+    async def resolve_target(
+        self, hint: str, candidates: list[dict], ctx: LlmContext
+    ) -> int | None:
+        # Candidates are newest first, so "the last feeding" is the first one whose
+        # kind is named. Naming no kind at all means the last thing logged.
+        lower = hint.lower()
+        for index, candidate in enumerate(candidates):
+            if str(candidate.get("type", "")).lower() in lower:
+                return index
+        return 0 if candidates else None
+
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
         lower = text.lower().strip()
         lang = ctx.lang or "en"
+
+        # Correcting or removing something comes first: "delete the last feeding"
+        # also reads as a question about the last feeding.
+        if any(hint in lower for hint in _DELETE_HINTS):
+            return StructuredResult(
+                action=Action.delete,
+                target_hint=text,
+                reply="Delete that?",
+                lang=lang,
+            )
+        if any(hint in lower for hint in _EDIT_HINTS):
+            return StructuredResult(
+                action=Action.update,
+                target_hint=text,
+                events=[self._classify(text, lower, ctx.now)],
+                reply="Change it to that?",
+                lang=lang,
+            )
 
         # A question is a query, not a new record.
         if any(hint in lower for hint in _QUESTION_HINTS):

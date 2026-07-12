@@ -1,5 +1,6 @@
 """LLM provider interface."""
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from ...models.events import (
     CareSignal,
@@ -54,4 +55,16 @@ class LLMProvider(ABC):
     @abstractmethod
     async def write_wrapped(self, stats: WrappedStats, ctx: LlmContext) -> str:
         """Tell a whole babyhood back to the parent, from the tally of it."""
+        ...
+
+    @abstractmethod
+    async def resolve_target(
+        self, hint: str, candidates: list[dict], ctx: LlmContext
+    ) -> Optional[int]:
+        """Which of these already-logged records does the caregiver mean?
+
+        Returns an index into `candidates`, or None when it is not clear enough to
+        act on. The model is shown records, never ids, so it cannot name one that
+        does not exist.
+        """
         ...

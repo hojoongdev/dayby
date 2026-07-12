@@ -53,6 +53,11 @@ class StructuredResult(BaseModel):
     settings: Optional[dict[str, Any]] = None
     lang: str = "ko"
 
+    # For update/delete: the record the server believes "the last feeding" means.
+    # The model never sees an id, so it cannot invent one -- the server looks the
+    # target up in the real timeline and puts it here for the caregiver to confirm.
+    target: Optional["EventOut"] = None
+
 
 class LlmContext(BaseModel):
     """Context injected into the LLM for every utterance."""
@@ -185,6 +190,17 @@ class EventCreate(BaseModel):
     raw_text: Optional[str] = None
 
 
+class EventUpdate(BaseModel):
+    """A correction. Only what is given changes; `fields` merges rather than replaces,
+    so "actually it was 150" does not wipe everything else that was said."""
+
+    type: Optional[str] = None
+    subtype: Optional[str] = None
+    fields: Optional[dict[str, Any]] = None
+    time: Optional[datetime] = None
+    note: Optional[str] = None
+
+
 class EventOut(BaseModel):
     id: str
     baby_id: str
@@ -195,3 +211,7 @@ class EventOut(BaseModel):
     note: Optional[str] = None
     source: Optional[str] = None
     created_at: datetime
+
+
+# StructuredResult.target refers to EventOut, which is defined below it.
+StructuredResult.model_rebuild()

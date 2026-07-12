@@ -22,8 +22,12 @@ from ..models.events import (
 from ..photos import store_photo
 from ..providers import get_llm_provider, get_stt_provider
 from ..util import now
+from .events import event_out
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
+
+# How far back to look for the record a correction refers to.
+TARGET_CANDIDATES = 30
 
 
 async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
@@ -52,6 +56,47 @@ async def _answer_if_query(
     return result
 
 
+async def _find_target(
+    result: StructuredResult, family: dict, ctx: LlmContext, said: str
+) -> StructuredResult:
+    """For a correction or a removal, work out which record they meant.
+
+    The model is shown real records and picks one by position; it never sees an id,
+    so it cannot name a record that does not exist. Whatever it picks comes back in
+    `target` for the caregiver to confirm before anything happens to it.
+    """
+    if result.action not in (Action.update, Action.delete):
+        return result
+
+    cursor = (
+        get_db().events
+        .find({"family_id": family["_id"]})
+        .sort("time", -1)
+        .limit(TARGET_CANDIDATES)
+    )
+    docs = [doc async for doc in cursor]
+    if not docs:
+        return result
+
+    candidates = [
+        {
+            "type": doc["type"],
+            "subtype": doc.get("subtype"),
+            "fields": doc.get("fields", {}),
+            # Local time, like everywhere else the model is shown a clock.
+            "time": doc["time"].astimezone(ctx.now.tzinfo).isoformat(),
+            "note": doc.get("note"),
+        }
+        for doc in docs
+    ]
+    index = await get_llm_provider().resolve_target(
+        result.target_hint or said, candidates, ctx
+    )
+    if index is not None:
+        result.target = event_out(docs[index])
+    return result
+
+
 @router.post("/text", response_model=StructuredResult)
 async def ingest_text(
     req: IngestTextRequest,
@@ -59,7 +104,8 @@ async def ingest_text(
 ) -> StructuredResult:
     ctx = await build_llm_context(family, req.now or now(), req.lang)
     result = await get_llm_provider().structure_log(req.text, ctx)
-    return await _answer_if_query(result, family, ctx, result.query_text or req.text)
+    result = await _answer_if_query(result, family, ctx, result.query_text or req.text)
+    return await _find_target(result, family, ctx, req.text)
 
 
 @router.post("/voice", response_model=IngestVoiceResponse)
@@ -81,6 +127,7 @@ async def ingest_voice(
     ctx = await build_llm_context(family, now(), lang)
     result = await get_llm_provider().structure_log(transcript, ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
+    result = await _find_target(result, family, ctx, transcript)
     return IngestVoiceResponse(transcript=transcript, result=result)
 
 

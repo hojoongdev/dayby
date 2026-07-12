@@ -168,6 +168,28 @@ class ApiClient {
     return Event.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// Correct a record. Whatever is left null stays as it was, and `fields` merges,
+  /// so fixing the amount does not erase the rest of what was said.
+  Future<Event> updateEvent(
+    String id, {
+    String? type,
+    String? subtype,
+    Map<String, dynamic>? fields,
+    DateTime? time,
+    String? note,
+  }) async {
+    final res = await _dio.patch('/events/$id', data: {
+      'type': ?type,
+      'subtype': ?subtype,
+      'fields': ?fields,
+      'time': ?time?.toUtc().toIso8601String(),
+      'note': ?note,
+    });
+    return Event.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteEvent(String id) => _dio.delete('/events/$id');
+
   Future<List<Event>> listEvents({
     String? babyId,
     String? type,

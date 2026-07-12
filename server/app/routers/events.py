@@ -2,11 +2,12 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..db import get_db
 from ..deps import get_current_family, require_baby
-from ..models.events import EventCreate, EventOut
+from ..models.events import EventCreate, EventOut, EventUpdate
+from ..photos import delete_photo
 from ..util import new_id, now
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -73,3 +74,51 @@ async def list_events(
 
     cursor = get_db().events.find(query).sort("time", -1).limit(limit)
     return [event_out(doc) async for doc in cursor]
+
+
+@router.patch("/{event_id}", response_model=EventOut)
+async def update_event(
+    event_id: str,
+    body: EventUpdate,
+    family: dict = Depends(get_current_family),
+) -> EventOut:
+    """Correct a record. "It was 150, not 120" should not erase what else it said."""
+    db = get_db()
+    if await db.events.find_one({"_id": event_id, "family_id": family["_id"]}) is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    updates: dict = {}
+    if body.type is not None:
+        updates["type"] = body.type
+    if body.subtype is not None:
+        updates["subtype"] = body.subtype
+    if body.time is not None:
+        updates["time"] = body.time
+    if body.note is not None:
+        updates["note"] = body.note
+    # Merged one key at a time, so a correction that mentions the amount leaves the
+    # photo, the brand, and everything else that was said about it alone.
+    for key, value in (body.fields or {}).items():
+        updates[f"fields.{key}"] = value
+
+    if updates:
+        await db.events.update_one({"_id": event_id}, {"$set": updates})
+    return event_out(await db.events.find_one({"_id": event_id}))
+
+
+@router.delete("/{event_id}", status_code=204)
+async def delete_event(
+    event_id: str,
+    family: dict = Depends(get_current_family),
+) -> None:
+    doc = await get_db().events.find_one_and_delete(
+        {"_id": event_id, "family_id": family["_id"]}
+    )
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # The picture belonged to the record. It goes too, rather than sitting in GridFS
+    # forever with nothing pointing at it.
+    photo_id = (doc.get("fields") or {}).get("photo_id")
+    if photo_id:
+        await delete_photo(photo_id, family["_id"])

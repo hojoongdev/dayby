@@ -262,6 +262,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         }
         if (result.action == 'create' && result.events.isNotEmpty) {
           _pending = result;
+        } else if ((result.isUpdate || result.isDelete) && result.target != null) {
+          // Something real is about to be changed or removed. Show which, and ask.
+          _pending = result;
         } else if (reply == null || reply.isEmpty) {
           _history.add(_Msg(fromUser: false, text: _fallback(result)));
         }
@@ -292,8 +295,72 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   String _fallback(StructuredResult r) {
     if (r.needsClarification != null) return r.needsClarification!;
+    if (r.isUpdate || r.isDelete) {
+      return "I'm not sure which one you mean — say a bit more about it.";
+    }
     if (r.action == 'query') return 'Asking about your logs is coming soon.';
     return "I couldn't catch that — try again.";
+  }
+
+  /// What the record becomes once the correction is merged in. The server merges
+  /// the same way, so this is what will actually be there.
+  Map<String, dynamic> _merged(Event target, StructuredEvent patch) =>
+      {...target.fields, ...patch.fields};
+
+  Future<void> _applyUpdate(StructuredResult result) async {
+    final target = result.target!;
+    final patch = result.events.first;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      final updated = await ref.read(apiClientProvider).updateEvent(
+            target.id,
+            type: patch.type,
+            subtype: patch.subtype,
+            fields: patch.fields,
+            time: patch.time?.toUtc(),
+            note: patch.note,
+          );
+      _afterChange(updated.babyId, updated.type, updated.subtype, updated.fields,
+          'Updated');
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
+    }
+  }
+
+  Future<void> _applyDelete(StructuredResult result) async {
+    final target = result.target!;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).deleteEvent(target.id);
+      _afterChange(
+          target.babyId, target.type, target.subtype, target.fields, 'Deleted');
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
+    }
+  }
+
+  void _afterChange(String babyId, String type, String? subtype,
+      Map<String, dynamic> fields, String what) {
+    final units = ref.read(unitPrefsProvider);
+    ref.invalidate(eventsProvider(babyId));
+    ref.invalidate(tipsProvider(babyId));
+    setState(() {
+      _saving = false;
+      _pending = null;
+      _history.add(_Msg(
+        fromUser: false,
+        text: eventSummary(type, subtype, fields, units: units),
+        subtitle: what,
+        saved: true,
+      ));
+    });
+    _scrollToBottom();
   }
 
   Future<void> _saveEvent(StructuredEvent e, Baby baby) async {
@@ -423,10 +490,133 @@ class _LogScreenState extends ConsumerState<LogScreen> {
                   subtitle: m.subtitle, saved: m.saved, isError: m.isError),
         if (_thinking) _appBubble('…'),
         if (_pending != null && active != null)
-          _confirmCard(_pending!.events.first, active, babies),
+          switch (_pending!.action) {
+            'update' => _changeCard(_pending!),
+            'delete' => _deleteCard(_pending!),
+            _ => _confirmCard(_pending!.events.first, active, babies),
+          },
       ],
     );
   }
+
+  /// A card wrapper for the two cards that act on a record that already exists.
+  Widget _actOnRecord({required Widget child}) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10, right: 24),
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: GlassCard(child: child),
+      ),
+    );
+  }
+
+  Widget _changeCard(StructuredResult result) {
+    final theme = Theme.of(context);
+    final units = ref.watch(unitPrefsProvider);
+    final target = result.target!;
+    final patch = result.events.first;
+
+    return _actOnRecord(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Change this?', style: theme.textTheme.labelLarge),
+          const SizedBox(height: 8),
+          Text(
+            eventSummary(target.type, target.subtype, target.fields, units: units),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              decoration: TextDecoration.lineThrough,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            eventSummary(
+              patch.type,
+              patch.subtype ?? target.subtype,
+              _merged(target, patch),
+              units: units,
+            ),
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(formatTime(patch.time ?? target.time),
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _saving ? null : () => setState(() => _pending = null),
+                child: const Text('Cancel'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _saving ? null : () => _applyUpdate(result),
+                child: _saving ? _spinner() : const Text('Change'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deleteCard(StructuredResult result) {
+    final theme = Theme.of(context);
+    final units = ref.watch(unitPrefsProvider);
+    final target = result.target!;
+
+    return _actOnRecord(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.delete_outline, size: 18, color: theme.colorScheme.error),
+              const SizedBox(width: 6),
+              Text('Delete this?',
+                  style: theme.textTheme.labelLarge
+                      ?.copyWith(color: theme.colorScheme.error)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            eventSummary(target.type, target.subtype, target.fields, units: units),
+            style: theme.textTheme.titleMedium,
+          ),
+          Text(formatTime(target.time),
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _saving ? null : () => setState(() => _pending = null),
+                child: const Text('Keep it'),
+              ),
+              const Spacer(),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.error,
+                  foregroundColor: theme.colorScheme.onError,
+                ),
+                onPressed: _saving ? null : () => _applyDelete(result),
+                child: _saving ? _spinner() : const Text('Delete'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _spinner() => const SizedBox(
+        height: 18,
+        width: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
 
   Widget _userBubble(String text, {Uint8List? photo}) {
     final scheme = Theme.of(context).colorScheme;
@@ -543,12 +733,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
                   const Spacer(),
                   FilledButton(
                     onPressed: _saving ? null : () => _saveEvent(e, active),
-                    child: _saving
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Save'),
+                    child: _saving ? _spinner() : const Text('Save'),
                   ),
                 ],
               ),
