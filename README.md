@@ -21,14 +21,15 @@ newborn: an iOS Action button or Shortcut logs an entry without even opening the
         |  HTTPS
         v
 [FastAPI server (Python)]
-  - Auth (family accounts)
+  - Auth abstraction  (mock / Google; sessions + refresh)
   - STT abstraction   (cloud / on-device / multimodal)
   - LLM abstraction   (swappable provider)
-  - Ingest pipeline   (structure text/voice into create/update/delete/query)
+  - Ingest pipeline   (text / voice / photo -> create/update/delete/query)
   - Stats aggregation + LLM analysis
+  - Change stream -> WebSocket (live family sync)
         |
         v
-[MongoDB]  (flexible event documents)
+[MongoDB]  (flexible event documents, GridFS photos, oplog)
 ```
 
 Every API key (LLM / STT) lives **only on the server** — never in the app.
@@ -49,10 +50,11 @@ Every API key (LLM / STT) lives **only on the server** — never in the app.
 Built in vertical slices — each phase ends in a running, demoable state.
 
 - P1 — Server + DB + text logging — done
-- **P2 — Flutter app + voice** *(current)*
-- P3 — Edit / delete / query + conversation context + multiple babies
-- P4 — Stats + real-time family sync
-- P5 — iOS Shortcuts / Action button / widgets
+- P2 — Flutter app + voice (conversational chat, on-device STT, spoken replies) — done
+- P3 — Query + conversation context + multiple babies — done; editing and deleting
+  past entries by voice is still open
+- P4 — Stats + real-time family sync — done
+- **P5 — iOS Shortcuts / Action button / widgets** *(next; needs Xcode and a device)*
 - P6 — LLM analysis + polish
 
 ## Quickstart
@@ -83,6 +85,13 @@ what change streams need, and change streams are how the live family sync works.
 - **Live by change stream.** One parent logs, the other's phone updates. The server
   tails MongoDB's oplog for that family and pushes down a WebSocket — no polling, no
   message broker, no second copy of the truth.
+- **The database counts, the model talks.** Proactive tips and the lifetime keepsake
+  are both aggregations first: the numbers come out of MongoDB (`$facet`, a
+  timezone-aware day/hour bucketing), and the model is given those and nothing else to
+  write from. A warm sentence, never an invented one.
+- **Mock-first everywhere, including identity.** `AUTH_PROVIDER=mock` runs the whole
+  sign-in flow — session, refresh, family membership — with no Google project, exactly
+  like the LLM and STT providers. Real providers slot in behind the same interface.
 
 ## Repository layout
 
