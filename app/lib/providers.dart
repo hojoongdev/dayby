@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
+import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
 import 'models/tip.dart';
@@ -89,6 +90,20 @@ final eventsProvider = FutureProvider.family<List<Event>, String>(
 /// The camera / library picker. Behind a provider so a test can hand the screen a
 /// picture without opening a platform dialog.
 final imagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
+
+final liveFeedProvider = Provider<LiveFeed>((ref) => const WebSocketLiveFeed());
+
+/// Every event the family logs, as it lands — including the ones logged on the
+/// other parent's phone. The server tails a MongoDB change stream; this is the
+/// end of that wire.
+final liveEventsProvider = StreamProvider<Event>((ref) {
+  final familyId = ref.watch(familyIdProvider);
+  if (familyId == null) return const Stream<Event>.empty();
+
+  final connection = ref.watch(liveFeedProvider).connect(familyId);
+  ref.onDispose(connection.close);
+  return connection.events;
+});
 
 /// A stored photo, fetched through the API client so it carries the family header.
 /// Cached by id, which is safe: a photo never changes once written.

@@ -12,7 +12,7 @@ from ..util import new_id, now
 router = APIRouter(prefix="/events", tags=["events"])
 
 
-def _event_out(doc: dict) -> EventOut:
+def event_out(doc: dict) -> EventOut:
     return EventOut(
         id=doc["_id"],
         baby_id=doc["baby_id"],
@@ -46,7 +46,7 @@ async def create_event(
         "created_at": now(),
     }
     await get_db().events.insert_one(doc)
-    return _event_out(doc)
+    return event_out(doc)
 
 
 @router.get("", response_model=list[EventOut])
@@ -72,4 +72,4 @@ async def list_events(
         query["time"] = time_range
 
     cursor = get_db().events.find(query).sort("time", -1).limit(limit)
-    return [_event_out(doc) async for doc in cursor]
+    return [event_out(doc) async for doc in cursor]

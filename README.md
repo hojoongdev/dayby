@@ -66,6 +66,9 @@ curl localhost:8000/health   # -> {"status":"ok","mongo":true}
 No API keys required: the LLM and STT providers default to **mock** implementations,
 so the whole pipeline runs offline.
 
+MongoDB comes up as a single-node **replica set**. That is not about redundancy — it is
+what change streams need, and change streams are how the live family sync works.
+
 ## Design highlights
 
 - **Provider abstraction, mock first.** STT and LLM sit behind interfaces with at least
@@ -77,6 +80,9 @@ so the whole pipeline runs offline.
 - **Safe by default.** Destructive actions (update / delete) always confirm first.
   Medical questions return a summary plus "consult a pediatrician" — never a diagnosis.
 - **Family-scoped.** Every request is scoped to a family; no cross-family data access.
+- **Live by change stream.** One parent logs, the other's phone updates. The server
+  tails MongoDB's oplog for that family and pushes down a WebSocket — no polling, no
+  message broker, no second copy of the truth.
 
 ## Repository layout
 

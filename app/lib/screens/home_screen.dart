@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers.dart';
 import 'dashboard_screen.dart';
 import 'log_screen.dart';
 import 'settings_screen.dart';
 import 'timeline_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _index = 0;
 
   static const _tabs = [
@@ -24,6 +26,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A log from the other parent's phone arrives here. It is the same event the
+    // server just wrote, so everything derived from the timeline has to catch up.
+    // Listening once, above the tabs, covers all of them.
+    ref.listen(liveEventsProvider, (_, next) {
+      final event = next.value;
+      if (event == null) return;
+      ref.invalidate(eventsProvider(event.babyId));
+      ref.invalidate(tipsProvider(event.babyId));
+    });
+
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(

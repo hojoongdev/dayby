@@ -2,17 +2,24 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    # A single-node replica set, not a standalone: change streams (which power the
+    # live family sync) are only supported on a replica set. One node is enough --
+    # this is about the oplog, not about redundancy.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     # Not published to the host on purpose: the server reaches MongoDB over the
     # internal compose network (mongodb://mongo:27017), so `docker compose up`
     # never collides with a MongoDB already running on your machine.
     # To inspect the database directly: `docker compose exec mongo mongosh`.
     volumes:
       - mongo-data:/data/db
+    # Doubles as the one-time replica set initiation: rs.status() throws until the
+    # set exists, and the catch initiates it. Healthy therefore means "ready to
+    # serve change streams", which is exactly what the server waits for.
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
       start_period: 20s
 
   server:
