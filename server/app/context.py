@@ -2,6 +2,7 @@
 from datetime import date, datetime
 from typing import Optional
 
+from . import lang as lang_codes
 from .db import get_db
 from .models.events import LlmContext, Turn
 
@@ -39,9 +40,10 @@ async def build_llm_context(
     now_dt: datetime,
     lang: Optional[str] = None,
     history: Optional[list[Turn]] = None,
+    languages: Optional[list[str]] = None,
 ) -> LlmContext:
-    """Baby names (for "who"), age/sex profiles (for age-aware answers), and the chat
-    history the model resolves references against."""
+    """Baby names (for "who"), age/sex profiles (for age-aware answers), the chat history
+    the model resolves references against, and the languages this caregiver speaks."""
     names: list[str] = []
     profiles: list[str] = []
     ref = now_dt.date()
@@ -57,5 +59,6 @@ async def build_llm_context(
         baby_names=names,
         baby_profiles=profiles,
         lang=lang,
+        languages=lang_codes.known(languages or []) or lang_codes.DEFAULT,
         history=trim_history(history or []),
     )

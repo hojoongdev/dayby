@@ -83,6 +83,9 @@ class LlmContext(BaseModel):
     # e.g. "Haein (5 months old, female)" — lets the model answer/tip by age.
     baby_profiles: list[str] = Field(default_factory=list)
     lang: Optional[str] = None
+    # The languages this caregiver says they speak. Nothing said to Dayby is in any other
+    # one, and saying so is what stops a mumbled Korean sentence coming back as Chinese.
+    languages: list[str] = Field(default_factory=list)
     # The chat so far, oldest first. What "actually 200" and "and yesterday?" resolve against.
     history: list[Turn] = Field(default_factory=list)
 
@@ -90,6 +93,7 @@ class LlmContext(BaseModel):
 class IngestTextRequest(BaseModel):
     text: str
     lang: Optional[str] = None
+    languages: list[str] = Field(default_factory=list)
     baby_ref: Optional[str] = None
     now: Optional[datetime] = None
     history: list[Turn] = Field(default_factory=list)

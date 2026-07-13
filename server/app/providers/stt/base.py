@@ -10,12 +10,14 @@ class STTProvider(ABC):
 
     @abstractmethod
     async def transcribe(
-        self, audio: bytes, mime_type: str, lang: Optional[str] = None
+        self, audio: bytes, mime_type: str, languages: Optional[list[str]] = None
     ) -> str:
         """What was said, in the language it was said in.
 
-        `lang` is at most a hint about who is usually holding the phone. It must
-        never force the answer: a Korean-speaking parent saying "120 ml formula"
-        should come back in English.
+        `languages` is the set this caregiver says they speak, and it is a constraint
+        rather than a hint: nothing they say to Dayby is in any other one. Without it, a
+        Korean sentence said quietly over a crying baby comes back as Chinese. Inside the
+        set the transcriber is still free — a Korean speaker who says "120 ml formula"
+        gets it back in English, and may switch mid-sentence.
         """
         ...

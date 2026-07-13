@@ -25,6 +25,7 @@ class _FailingApiClient extends ApiClient {
   Future<StructuredResult> ingestText(
     String text, {
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     throw DioException(
       requestOptions: RequestOptions(path: '/ingest/text'),

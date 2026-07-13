@@ -7,6 +7,7 @@ is how Korean input works without any Korean text in the source.
 from datetime import datetime, tzinfo
 from typing import Optional
 
+from ... import lang
 from ...models.events import (
     STANDARD_EVENT_TYPES,
     CareSignal,
@@ -242,6 +243,7 @@ Current time (ISO 8601, the caller's local time with UTC offset): {ctx.now.isofo
 Known baby names/nicknames: {babies}
 Baby profiles (name, age, sex): {profiles}
 Standard event types: {types_}
+Languages this caregiver speaks: {lang.spoken(ctx.languages)}
 
 Conversation so far (oldest first; "assistant" is you):
 {format_history(ctx.history)}
@@ -269,8 +271,10 @@ Return ONLY a JSON object with this exact shape:
 }}
 
 Rules:
-- The utterance may be in ANY language (English, Korean, ...). Detect it and set "lang".
-  Keep "note" and "reply" in the original language (Korean stays Korean); "reply" is one warm sentence.
+- The utterance is in one of the languages listed above, and in no other. Detect which, and
+  set "lang" to that code. If it seems to be a language not on that list, you have misheard:
+  read it as the listed language it most resembles. Keep "note" and "reply" in the language
+  it was said in; "reply" is one warm sentence.
 - The conversation above is what is on the caregiver's screen. Use it to resolve what the new
   utterance leaves out: "it", "that one", a bare amount ("actually 200"), a question with no
   subject ("and yesterday?").

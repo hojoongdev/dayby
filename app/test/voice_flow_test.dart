@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dayby/api/api_client.dart';
 import 'package:dayby/main.dart';
+import 'package:dayby/lang.dart';
 import 'package:dayby/models/event.dart';
 import 'package:dayby/models/family.dart';
 import 'package:dayby/providers.dart';
@@ -48,6 +48,7 @@ class _FakeVoice extends VoiceRecorder {
 
 class _FakeApiClient extends ApiClient {
   List<Turn>? sentHistory;
+  List<String>? sentLanguages;
 
   @override
   Future<List<Baby>> listBabies() async =>
@@ -65,8 +66,10 @@ class _FakeApiClient extends ApiClient {
     required Uint8List bytes,
     required String mimeType,
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     sentHistory = history;
+    sentLanguages = languages;
     return const IngestVoiceResult(
       transcript: 'formula 120ml',
       result: StructuredResult(
@@ -158,5 +161,19 @@ void main() {
       [for (final t in api.sentHistory!) t.text],
       ['formula 120ml', 'Formula, 120 ml. Save it?'],
     );
+  });
+
+  testWidgets('the recording goes up with the languages this person speaks',
+      (tester) async {
+    final (voice, api) = await _openChat(tester);
+
+    await tester.tap(_mic);
+    await tester.pumpAndSettle();
+    voice.stopsTalking();
+    await tester.pumpAndSettle();
+
+    // Without these the transcriber is guessing from the sound alone, and a Korean
+    // sentence said over a crying baby comes back as Chinese.
+    expect(api.sentLanguages, kDefaultLanguages);
   });
 }

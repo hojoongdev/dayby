@@ -171,6 +171,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   Future<void> _sendVoice(Uint8List audio) async {
     final history = _turns();
+    final languages = ref.read(spokenLanguagesProvider);
     setState(() {
       _pending = null;
       _thinking = true;
@@ -181,6 +182,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             bytes: audio,
             mimeType: VoiceRecorder.mimeType,
             history: history,
+            languages: languages,
           );
       if (!mounted) return;
       // The transcript is the caregiver's own bubble: with the server listening, this is
@@ -283,6 +285,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     if (photo != null && baby == null) return;
     // Read off before the new message is appended: it is the utterance, not the context.
     final history = _turns();
+    final languages = ref.read(spokenLanguagesProvider);
     _lastText = text;
     _input.clear();
     setState(() {
@@ -294,7 +297,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     _scrollToBottom();
     try {
       final result = photo == null
-          ? await api.ingestText(text, history: history)
+          ? await api.ingestText(text, history: history, languages: languages)
           : (await api.ingestPhoto(
               babyId: baby!.id,
               bytes: photo.bytes,
@@ -302,6 +305,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               mimeType: photo.mime,
               text: text,
               history: history,
+              languages: languages,
             ))
               .result;
       if (!mounted) return;

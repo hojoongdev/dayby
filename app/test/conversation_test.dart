@@ -34,6 +34,7 @@ class _FakeApiClient extends ApiClient {
   Future<StructuredResult> ingestText(
     String text, {
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     sent.add(history);
     final reply = replies[_call++];

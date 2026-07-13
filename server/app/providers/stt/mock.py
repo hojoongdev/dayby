@@ -9,6 +9,6 @@ class MockSTTProvider(STTProvider):
     transcript = "formula 120ml"
 
     async def transcribe(
-        self, audio: bytes, mime_type: str, lang: Optional[str] = None
+        self, audio: bytes, mime_type: str, languages: Optional[list[str]] = None
     ) -> str:
         return self.transcript

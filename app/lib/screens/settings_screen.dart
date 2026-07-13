@@ -5,9 +5,11 @@ import 'package:share_plus/share_plus.dart';
 
 import '../api/api_client.dart';
 import '../format.dart';
+import '../lang.dart';
 import '../models/family.dart';
 import '../providers.dart';
 import '../widgets/glass.dart';
+import 'preferences_screen.dart';
 import 'wrapped_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -86,10 +88,19 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ],
-          const _SectionHeader('Assistant'),
-          const _AssistantSection(),
-          const _SectionHeader('Units'),
-          const _UnitsSection(),
+          const _SectionHeader('You'),
+          _MenuRow(
+            icon: Icons.translate_outlined,
+            title: 'Languages',
+            subtitle: _spoken(ref),
+            screen: const LanguagesScreen(),
+          ),
+          _MenuRow(
+            icon: Icons.straighten_outlined,
+            title: 'Units',
+            subtitle: _units(ref),
+            screen: const UnitsScreen(),
+          ),
           // Offered only where there is a sensor to ask.
           if (ref.watch(biometricsAvailableProvider).value ?? false) ...[
             const _SectionHeader('Privacy'),
@@ -253,60 +264,46 @@ class _FamilyCard extends StatelessWidget {
   }
 }
 
-/// The language the assistant answers in where there is nothing to detect it from: the
-/// tips on Home, and the wrapped story. What you say to it is always worked out from the
-/// words themselves, which is why there is no longer a toggle on the Log tab.
-class _AssistantSection extends ConsumerWidget {
-  const _AssistantSection();
+/// A row that leads somewhere, showing enough of what is behind it that you rarely have
+/// to go and look.
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.screen,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget screen;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return _dropdownTile(
-      'Language',
-      ref.watch(assistantLangProvider),
-      const {'ko': 'Korean', 'en': 'English'},
-      (v) => ref.read(assistantLangProvider.notifier).set(v),
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => screen),
+      ),
     );
   }
 }
 
-class _UnitsSection extends ConsumerWidget {
-  const _UnitsSection();
+String _spoken(WidgetRef ref) =>
+    ref.watch(spokenLanguagesProvider).map(languageName).join(', ');
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final u = ref.watch(unitPrefsProvider);
-    final n = ref.read(unitPrefsProvider.notifier);
-    return Column(
-      children: [
-        _dropdownTile('Temperature', u.temp, const {'c': '°C', 'f': '°F'},
-            (v) => n.set(temp: v)),
-        _dropdownTile('Weight', u.weight, const {'kg': 'kg', 'g': 'g', 'lb': 'lb'},
-            (v) => n.set(weight: v)),
-        _dropdownTile('Length', u.length, const {'cm': 'cm', 'm': 'm', 'in': 'inch'},
-            (v) => n.set(length: v)),
-        _dropdownTile('Feeding volume', u.volume, const {'ml': 'ml', 'oz': 'oz'},
-            (v) => n.set(volume: v)),
-      ],
-    );
-  }
-}
-
-Widget _dropdownTile(String label, String value, Map<String, String> options,
-    ValueChanged<String> onChanged) {
-  return ListTile(
-    title: Text(label),
-    trailing: DropdownButton<String>(
-      value: value,
-      items: [
-        for (final e in options.entries)
-          DropdownMenuItem(value: e.key, child: Text(e.value)),
-      ],
-      onChanged: (v) {
-        if (v != null) onChanged(v);
-      },
-    ),
-  );
+String _units(WidgetRef ref) {
+  final u = ref.watch(unitPrefsProvider);
+  return [
+    u.volume,
+    u.weight,
+    u.length,
+    u.temp == 'c' ? '°C' : '°F',
+  ].join(' · ');
 }
 
 class _SectionHeader extends StatelessWidget {

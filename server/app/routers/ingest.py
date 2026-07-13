@@ -51,6 +51,25 @@ def _turns(raw: str) -> list[Turn]:
         return []
 
 
+def _languages(raw: str) -> list[str]:
+    """The caregiver's languages, which ride the multipart endpoints as "ko,en"."""
+    return [code.strip() for code in raw.split(",") if code.strip()]
+
+
+def _held_to_language(result: StructuredResult, ctx: LlmContext) -> StructuredResult:
+    """`lang` is what the app speaks the reply out loud in.
+
+    Naming the caregiver's languages in the prompt is a strong prior, but only a prior: a
+    quiet sentence over a crying baby can still come back believed to be Chinese. It is
+    not this server's place to overwrite the words — but it will not hand the phone a
+    voice its owner cannot understand.
+    """
+    if result.lang not in ctx.languages:
+        logger.warning("Model answered in %s, which they do not speak", result.lang)
+        result.lang = ctx.languages[0]
+    return result
+
+
 async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
     """Compact recent events for grounding a query answer (newest first)."""
     out: list[dict] = []
@@ -123,8 +142,10 @@ async def ingest_text(
     req: IngestTextRequest,
     family: dict = Depends(get_current_family),
 ) -> StructuredResult:
-    ctx = await build_llm_context(family, req.now or now(), req.lang, req.history)
-    result = await get_llm_provider().structure_log(req.text, ctx)
+    ctx = await build_llm_context(
+        family, req.now or now(), req.lang, req.history, req.languages
+    )
+    result = _held_to_language(await get_llm_provider().structure_log(req.text, ctx), ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or req.text)
     return await _find_target(result, family, ctx, req.text)
 
@@ -133,6 +154,7 @@ async def ingest_text(
 async def ingest_voice(
     file: UploadFile = File(...),
     lang: Optional[str] = Form(None),
+    languages: str = Form(""),
     at: Optional[datetime] = Form(None, alias="now"),
     history: str = Form("[]"),
     family: dict = Depends(get_current_family),
@@ -140,9 +162,9 @@ async def ingest_voice(
     """Transcribe a recording, then structure it like a typed sentence.
 
     The audio is a multipart field rather than the raw request body, so the chat history
-    can travel with it. `lang` is only a hint: the real transcriber returns whatever was
-    actually spoken. `now` is the caller's local time, without which "at eight this
-    morning" resolves in UTC.
+    can travel with it. `languages` is what this caregiver says they speak, and the
+    transcriber is held to it. `now` is the caller's local time, without which "at eight
+    this morning" resolves in UTC.
     """
     audio = await file.read()
     if not audio:
@@ -159,14 +181,15 @@ async def ingest_voice(
             status_code=415, detail=f"Not an audio recording: {mime_type or 'unknown'}"
         )
 
-    transcript = await get_stt_provider().transcribe(audio, mime_type, lang)
+    spoken = _languages(languages)
+    transcript = await get_stt_provider().transcribe(audio, mime_type, spoken)
     if not transcript.strip():
         raise HTTPException(
             status_code=422, detail="I couldn't make that out — say it again?"
         )
 
-    ctx = await build_llm_context(family, at or now(), lang, _turns(history))
-    result = await get_llm_provider().structure_log(transcript, ctx)
+    ctx = await build_llm_context(family, at or now(), lang, _turns(history), spoken)
+    result = _held_to_language(await get_llm_provider().structure_log(transcript, ctx), ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     result = await _find_target(result, family, ctx, transcript)
     return IngestVoiceResponse(transcript=transcript, result=result)
@@ -178,6 +201,7 @@ async def ingest_photo(
     baby_id: str = Form(...),
     text: str = Form(""),
     lang: Optional[str] = Form(None),
+    languages: str = Form(""),
     at: Optional[datetime] = Form(None, alias="now"),
     history: str = Form("[]"),
     family: dict = Depends(get_current_family),
@@ -195,8 +219,12 @@ async def ingest_photo(
     content_type = file.content_type or ""
     photo_id = await store_photo(data, content_type, family["_id"], baby_id)
 
-    ctx = await build_llm_context(family, at or now(), lang, _turns(history))
-    result = await get_llm_provider().structure_photo(data, content_type, text, ctx)
+    ctx = await build_llm_context(
+        family, at or now(), lang, _turns(history), _languages(languages)
+    )
+    result = _held_to_language(
+        await get_llm_provider().structure_photo(data, content_type, text, ctx), ctx
+    )
     for event in result.events:
         event.fields["photo_id"] = photo_id
 

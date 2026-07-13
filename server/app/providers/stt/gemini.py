@@ -11,6 +11,7 @@ from typing import Optional
 from google import genai
 from google.genai import types
 
+from ... import lang
 from ...config import settings
 from .base import STTProvider
 
@@ -31,7 +32,8 @@ SUPPORTED_TYPES = (
 )
 
 INSTRUCTION = """You transcribe short recordings of a parent logging something about
-their baby — a feed, a nappy change, a temperature, a question.
+their baby — a feed, a nappy change, a temperature, a question. They are usually holding
+the baby, often in a room with the baby crying in it.
 
 - Write exactly what was said, in the language it was said in. Never translate.
 - Return the transcript and nothing else: no quotes, no speaker labels, no timestamps,
@@ -54,14 +56,16 @@ class GeminiSTTProvider(STTProvider):
         self._model = settings.gemini_model
 
     async def transcribe(
-        self, audio: bytes, mime_type: str, lang: Optional[str] = None
+        self, audio: bytes, mime_type: str, languages: Optional[list[str]] = None
     ) -> str:
-        # A hint about who is usually holding the phone, not an instruction.
+        spoken = lang.spoken(languages or [])
+        # Not a hint. Left to guess from the sound alone, a Korean sentence said quietly
+        # over a crying baby comes back as Chinese; knowing which languages are even on
+        # the table is what stops that.
         hint = (
-            f"The caregiver usually speaks '{lang}', but transcribe whatever language "
-            "you actually hear."
-            if lang
-            else "Transcribe whatever language you hear."
+            f"This caregiver speaks only: {spoken}. What was said is in one of those and "
+            "nothing else. If it sounds like some other language, you have misheard — "
+            "transcribe it as whichever of theirs it most nearly is."
         )
         try:
             response = await self._client.aio.models.generate_content(

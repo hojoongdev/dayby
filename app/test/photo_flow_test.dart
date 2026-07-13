@@ -56,6 +56,7 @@ class _FakeApiClient extends ApiClient {
     required String mimeType,
     String text = '',
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     sentText = text;
     sentMime = mimeType;

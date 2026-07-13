@@ -141,15 +141,18 @@ class ApiClient {
   }
 
   /// `history` is the chat so far, which is what "actually 200" and "and yesterday?"
-  /// resolve against. No language is sent: the server works out what was said in.
+  /// resolve against. `languages` is what this caregiver speaks: the server works out
+  /// which of those was used, and is not allowed to reach for any other.
   Future<StructuredResult> ingestText(
     String text, {
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     final res = await _dio.post('/ingest/text', data: {
       'text': text,
       'now': _localNowIso(),
       'history': [for (final turn in history) turn.toJson()],
+      'languages': languages,
     });
     return StructuredResult.fromJson(res.data as Map<String, dynamic>);
   }
@@ -160,10 +163,12 @@ class ApiClient {
     required Uint8List bytes,
     required String mimeType,
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     final form = FormData.fromMap({
       'now': _localNowIso(),
       'history': jsonEncode([for (final turn in history) turn.toJson()]),
+      'languages': languages.join(','),
       'file': MultipartFile.fromBytes(
         bytes,
         filename: 'speech.wav',
@@ -243,11 +248,13 @@ class ApiClient {
     required String mimeType,
     String text = '',
     List<Turn> history = const [],
+    List<String> languages = const [],
   }) async {
     final form = FormData.fromMap({
       'baby_id': babyId,
       'text': text,
       'now': _localNowIso(),
+      'languages': languages.join(','),
       // Multipart fields are scalars, so the history goes as a JSON string.
       'history': jsonEncode([for (final turn in history) turn.toJson()]),
       'file': MultipartFile.fromBytes(

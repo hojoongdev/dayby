@@ -8,6 +8,7 @@ import 'api/api_client.dart';
 import 'app_lock.dart';
 import 'auth.dart';
 import 'google.dart';
+import 'lang.dart';
 import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
@@ -22,6 +23,7 @@ const familyNameKey = 'family_name';
 const inviteCodeKey = 'invite_code';
 const selectedBabyIdKey = 'selected_baby_id';
 const assistantLangKey = 'assistant_lang';
+const spokenLanguagesKey = 'spoken_languages';
 const appLockKey = 'app_lock';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -270,10 +272,36 @@ final wrappedProvider = FutureProvider.family<Wrapped, String>(
       ),
 );
 
-/// The language the assistant speaks back in ("ko" | "en"), for the surfaces where
-/// nobody has said anything for it to detect: the tips on Home and the wrapped story.
-/// What the caregiver *says* is always detected from the words themselves.
-/// Defaults to Korean — Dayby is a Korean-first app.
+/// The languages this caregiver speaks. Sent with every utterance, so that what comes
+/// back is in one of them and never in a language nobody in the house has ever spoken.
+class SpokenLanguagesNotifier extends Notifier<List<String>> {
+  @override
+  List<String> build() {
+    final saved = ref.watch(sharedPrefsProvider).getStringList(spokenLanguagesKey);
+    return (saved == null || saved.isEmpty) ? kDefaultLanguages : saved;
+  }
+
+  /// Never empty: an empty list is not "no preference", it is "any language on earth",
+  /// which is the thing this setting exists to rule out.
+  Future<void> set(List<String> codes) async {
+    final next = codes.where(kLanguages.containsKey).toList();
+    if (next.isEmpty) return;
+    await ref.read(sharedPrefsProvider).setStringList(spokenLanguagesKey, next);
+    state = next;
+
+    // Dayby cannot answer in a language you have just said you do not speak.
+    if (!next.contains(ref.read(assistantLangProvider))) {
+      await ref.read(assistantLangProvider.notifier).set(next.first);
+    }
+  }
+}
+
+final spokenLanguagesProvider =
+    NotifierProvider<SpokenLanguagesNotifier, List<String>>(SpokenLanguagesNotifier.new);
+
+/// The language the assistant speaks back in, for the surfaces where nobody has said
+/// anything for it to detect: the tips on Home and the wrapped story. What the caregiver
+/// *says* is worked out from the words themselves. Defaults to Korean.
 class AssistantLangNotifier extends Notifier<String> {
   @override
   String build() => ref.watch(sharedPrefsProvider).getString(assistantLangKey) ?? 'ko';

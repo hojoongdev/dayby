@@ -29,3 +29,6 @@ app/ios/.symlinks/
 # --- Local-only notes (never part of the shipped repo) ---
 dayby-spec.md
 CLAUDE.md
+
+# Local backlog of what the user asked for. Not part of the public repo.
+BACKLOG.md
