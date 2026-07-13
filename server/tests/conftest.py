@@ -2,7 +2,17 @@
 import pytest
 from pymongo import MongoClient
 
+from app import ratelimit
 from app.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """The ingest limiter is process-global. Clear it before each test so one test's
+    requests never count against another's, and the default limit never trips by accident.
+    """
+    ratelimit._ingest._hits.clear()
+    yield
 
 
 @pytest.fixture

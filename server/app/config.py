@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # them join later; short enough that a leaked code does not open the family forever.
     invite_ttl_hours: int = 168  # 7 days
 
+    # How often one caller may hit the Gemini-backed ingest endpoints. Well above any human
+    # rate; it exists to cap an abused endpoint, where each call is two model calls.
+    ingest_rate_per_minute: int = 30
+
     # App
     app_env: str = "development"
 

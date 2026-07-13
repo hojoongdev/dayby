@@ -24,6 +24,7 @@ from ..models.events import (
 )
 from ..photos import store_photo
 from ..providers import get_llm_provider, get_stt_provider
+from ..ratelimit import rate_limit_ingest
 from ..util import now
 from .events import event_out
 
@@ -137,7 +138,9 @@ async def _find_target(
     return result
 
 
-@router.post("/text", response_model=StructuredResult)
+@router.post(
+    "/text", response_model=StructuredResult, dependencies=[Depends(rate_limit_ingest)]
+)
 async def ingest_text(
     req: IngestTextRequest,
     family: dict = Depends(get_current_family),
@@ -150,7 +153,11 @@ async def ingest_text(
     return await _find_target(result, family, ctx, req.text)
 
 
-@router.post("/voice", response_model=IngestVoiceResponse)
+@router.post(
+    "/voice",
+    response_model=IngestVoiceResponse,
+    dependencies=[Depends(rate_limit_ingest)],
+)
 async def ingest_voice(
     file: UploadFile = File(...),
     lang: Optional[str] = Form(None),
@@ -195,7 +202,11 @@ async def ingest_voice(
     return IngestVoiceResponse(transcript=transcript, result=result)
 
 
-@router.post("/photo", response_model=IngestPhotoResponse)
+@router.post(
+    "/photo",
+    response_model=IngestPhotoResponse,
+    dependencies=[Depends(rate_limit_ingest)],
+)
 async def ingest_photo(
     file: UploadFile = File(...),
     baby_id: str = Form(...),
