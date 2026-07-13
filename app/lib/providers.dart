@@ -8,6 +8,7 @@ import 'api/api_client.dart';
 import 'app_lock.dart';
 import 'auth.dart';
 import 'google.dart';
+import 'intent_bridge.dart';
 import 'lang.dart';
 import 'live.dart';
 import 'models/event.dart';
@@ -211,6 +212,21 @@ final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
   ref.onDispose(recorder.dispose);
   return recorder;
 });
+
+final intentBridgeProvider = Provider<IntentBridge>((ref) => const IntentBridge());
+
+/// A tick that goes up each time the Action button or Siri asks to start a voice log. The
+/// shell switches to the Log tab on it; the log screen opens the mic. It is a counter, not
+/// a bool, so pressing the button twice in a row is two separate requests.
+class VoiceLaunchNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void request() => state++;
+}
+
+final voiceLaunchProvider =
+    NotifierProvider<VoiceLaunchNotifier, int>(VoiceLaunchNotifier.new);
 
 final liveFeedProvider = Provider<LiveFeed>((ref) => const WebSocketLiveFeed());
 

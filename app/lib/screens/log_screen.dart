@@ -74,6 +74,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   bool _muted = false;
   /// Whether there is anything typed. The send button only exists while there is.
   bool _typing = false;
+  /// An Action-button launch that arrived before the mic finished setting up. Start the
+  /// moment it is ready, once.
+  bool _startWhenReady = false;
 
   final List<_Msg> _history = [];
   StructuredResult? _pending;
@@ -110,9 +113,25 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         if (mounted) setState(() => _level = l);
       });
       if (mounted) setState(() => _voiceAvailable = available);
+      if (available && _startWhenReady) {
+        _startWhenReady = false;
+        _toggleMic();
+      }
     } catch (_) {
       if (mounted) setState(() => _voiceAvailable = false);
     }
+  }
+
+  /// Start recording because the Action button (or Siri) asked to. If the mic is still
+  /// being set up, remember to start the moment it is ready; if a recording is already
+  /// running, leave it alone.
+  void _startFromIntent() {
+    if (_listening || _opening) return;
+    if (!_voiceAvailable) {
+      _startWhenReady = true;
+      return;
+    }
+    _toggleMic();
   }
 
   void _scrollToBottom() {
@@ -502,6 +521,10 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   Widget build(BuildContext context) {
     final babies = ref.watch(babiesProvider).value ?? const <Baby>[];
     final active = ref.watch(activeBabyProvider);
+
+    // The Action button or Siri asked to log by voice. Open the mic off the same tick the
+    // shell used to switch here.
+    ref.listen(voiceLaunchProvider, (_, _) => _startFromIntent());
 
     return Scaffold(
       extendBodyBehindAppBar: true,

@@ -15,8 +15,10 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
   int _index = 0;
+  static const _logTab = 1;
 
   static const _tabs = [
     DashboardScreen(),
@@ -27,7 +29,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // The Action button may have launched us straight into this shell.
+    _consumePendingIntent();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Or it may have brought an already-running app to the front.
+    if (state == AppLifecycleState.resumed) _consumePendingIntent();
+  }
+
+  Future<void> _consumePendingIntent() async {
+    final action = await ref.read(intentBridgeProvider).takePendingAction();
+    if (action == 'log_voice') {
+      ref.read(voiceLaunchProvider.notifier).request();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // The Action button (or Siri) asked to start a voice log: show the Log tab. The log
+    // screen, always built inside the IndexedStack, opens the mic off the same tick.
+    ref.listen(voiceLaunchProvider, (_, _) {
+      if (_index != _logTab) setState(() => _index = _logTab);
+    });
+
     // A log from the other parent's phone arrives here. It is the same event the
     // server just wrote, so everything derived from the timeline has to catch up.
     // Listening once, above the tabs, covers all of them.
