@@ -1,5 +1,7 @@
 # Dayby
 
+[![CI](https://github.com/hojoongdev/dayby/actions/workflows/ci.yml/badge.svg)](https://github.com/hojoongdev/dayby/actions/workflows/ci.yml)
+
 **Voice-first baby-care logging for parents.** Say one sentence — an LLM structures it
 into a record, your partner sees it in real time, and you get charts plus
 natural-language analysis. Designed to be used every day, one-handed, while holding a

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push makes the first one's answer worthless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same command the README gives a human, so a green tick here means the thing
+      # they would run works. Compose defaults every provider to its mock, so no API key
+      # is needed; the live Gemini test skips itself when GEMINI_API_KEY is absent. The
+      # database name has to end in _test or the fixture that wipes it refuses to run.
+      - name: pytest
+        run: >
+          docker compose run --rm -e DB_NAME=dayby_test server
+          sh -c "uv pip install --system -q pytest pytest-asyncio httpx && pytest -q"
+
+  app:
+    name: App
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.6
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
