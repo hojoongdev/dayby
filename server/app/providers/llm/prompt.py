@@ -11,9 +11,17 @@ from ...models.events import (
     STANDARD_EVENT_TYPES,
     CareSignal,
     LlmContext,
+    Turn,
     UpcomingEvent,
     WrappedStats,
 )
+
+
+def format_history(turns: list[Turn]) -> str:
+    """The chat so far, as compact role-prefixed lines."""
+    if not turns:
+        return "(nothing yet - this is the first thing they have said)"
+    return "\n".join(f"{turn.role.value}: {turn.text}" for turn in turns)
 
 
 def format_signals(signals: list[CareSignal]) -> str:
@@ -129,6 +137,9 @@ def build_target_instruction(ctx: LlmContext, hint: str) -> str:
 They said: "{hint}"
 Current time (the caller's local time, with offset): {ctx.now.isoformat()}
 
+Conversation so far (oldest first; "assistant" is the app):
+{format_history(ctx.history)}
+
 You will be given their recent records, newest first, each with a number.
 
 Return ONLY: {{"index": <the number of the record they mean, or null>}}
@@ -136,9 +147,37 @@ Return ONLY: {{"index": <the number of the record they mean, or null>}}
 Rules:
 - Match on what they said: the kind of record, the amount, roughly when.
 - "The last feeding" means the most recent record of that kind, and nothing else.
+- The conversation tells you which record "that one" is. A record the app has just reported
+  saving is usually the one being corrected.
 - Times are shown in the caller's local time. Do not shift them.
 - If two records fit equally well, or none does, return null. A wrong guess is worse
   than asking, because the caregiver is about to confirm a change to whatever you pick."""
+
+
+def build_query_instruction(ctx: LlmContext) -> str:
+    """Answer a question from the family's logged events only.
+
+    The history is for working out what the question refers to; the events are the only
+    source of facts. Without that split the model will confirm a number that was merely
+    spoken and never logged.
+    """
+    profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
+    return f"""You are a warm baby-care assistant. Answer the caregiver's question using ONLY
+the logged events you are given. If they do not contain the answer, say you don't have that
+logged yet. Be concise, and reply in the SAME language as the question.
+
+Current time (the caller's local time, with offset): {ctx.now.isoformat()}
+Baby profiles (name, age, sex): {profiles}
+
+Conversation so far (oldest first; "assistant" is you):
+{format_history(ctx.history)}
+
+Rules:
+- Event times are UTC. When you mention a time, convert it to the caller's local timezone
+  (the offset above) and say it the way a person would.
+- The conversation tells you what the question is about. The events tell you the answer.
+  Never state as fact something that was only said in the chat and is not in the events.
+- Do not diagnose. For anything health-related, gently suggest consulting a pediatrician."""
 
 
 def build_wrapped_instruction(ctx: LlmContext, stats: WrappedStats) -> str:
@@ -202,6 +241,9 @@ Known baby names/nicknames: {babies}
 Baby profiles (name, age, sex): {profiles}
 Standard event types: {types_}
 
+Conversation so far (oldest first; "assistant" is you):
+{format_history(ctx.history)}
+
 Return ONLY a JSON object with this exact shape:
 {{
   "action": "create | update | delete | query",
@@ -227,6 +269,17 @@ Return ONLY a JSON object with this exact shape:
 Rules:
 - The utterance may be in ANY language (English, Korean, ...). Detect it and set "lang".
   Keep "note" and "reply" in the original language (Korean stays Korean); "reply" is one warm sentence.
+- The conversation above is what is on the caregiver's screen. Use it to resolve what the new
+  utterance leaves out: "it", "that one", a bare amount ("actually 200"), a question with no
+  subject ("and yesterday?").
+- A line of yours that reports a record as saved, updated or deleted means it really is in the
+  timeline. A record you only offered, and that was never confirmed, was NOT saved. Do not
+  treat it as logged.
+- Most utterances are still a new record. Only read one as a correction, a removal or a
+  follow-up when it clearly refers back to the conversation.
+- Write "target_hint" and "query_text" so they stand on their own, filling in from the
+  conversation whatever the caregiver left implicit ("and yesterday?" -> "how many feeds were
+  there yesterday?"). Whatever reads them next is shown the logs, not this chat.
 - A question ("when was the last feeding?") is action=query with an empty events list.
 - Fixing something already logged ("actually it was 150", "that feed was at 8, not 9") is
   action=update: describe the record they mean in "target_hint", and put the corrected values

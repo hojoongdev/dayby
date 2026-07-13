@@ -26,6 +26,7 @@ from ...models.events import (
 from .base import LLMProvider
 from .prompt import (
     build_photo_instruction,
+    build_query_instruction,
     build_system_instruction,
     build_target_instruction,
     build_tips_instruction,
@@ -106,23 +107,13 @@ class GeminiLLMProvider(LLMProvider):
     async def answer_query(
         self, question: str, events: list[dict], ctx: LlmContext
     ) -> str:
-        instruction = (
-            "You are a warm baby-care assistant. Answer the caregiver's question using ONLY "
-            "the logged events provided. If the data does not contain the answer, say you don't "
-            "have that logged yet. Be concise and reply in the SAME language as the question. "
-            "Event times are UTC; when you mention a time, convert it to the caller's local "
-            "timezone (the offset in the current local time below) and state it naturally. "
-            "Do not diagnose; for health concerns, gently suggest consulting a pediatrician.\n"
-            f"Current local time (with offset): {ctx.now.isoformat()}\n"
-            f"Baby profiles: {'; '.join(ctx.baby_profiles) if ctx.baby_profiles else 'none'}"
-        )
         context = json.dumps(events, ensure_ascii=False, default=str)
         try:
             response = await self._client.aio.models.generate_content(
                 model=self._model,
                 contents=f"Question: {question}\n\nLogged events (JSON): {context}",
                 config=types.GenerateContentConfig(
-                    system_instruction=instruction,
+                    system_instruction=build_query_instruction(ctx),
                     temperature=0.2,
                 ),
             )

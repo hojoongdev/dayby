@@ -1,21 +1,14 @@
-"""Ingest an utterance (typed or spoken) and structure it into a record.
+"""Ingest an utterance (typed, spoken or photographed) and structure it into a record.
 
-Both endpoints return a confirmation payload; nothing is saved until the user
-confirms and posts to /events.
+Each endpoint also takes the chat history. Nothing is saved until the user confirms and
+posts to /events.
 """
+import json
+import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    HTTPException,
-    Query,
-    Request,
-    UploadFile,
-)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from ..context import build_llm_context
 from ..db import get_db
@@ -27,11 +20,14 @@ from ..models.events import (
     IngestVoiceResponse,
     LlmContext,
     StructuredResult,
+    Turn,
 )
 from ..photos import store_photo
 from ..providers import get_llm_provider, get_stt_provider
 from ..util import now
 from .events import event_out
+
+logger = logging.getLogger("dayby.ingest")
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -40,6 +36,19 @@ TARGET_CANDIDATES = 30
 
 # A sentence, not a podcast. Gemini takes audio inline up to about this much.
 MAX_AUDIO_BYTES = 16 * 1024 * 1024
+
+
+def _turns(raw: str) -> list[Turn]:
+    """Parse the chat history, which the multipart endpoints carry as a JSON string.
+
+    A bad one is logged and dropped rather than failing the request: losing the history is
+    better than losing the log entry.
+    """
+    try:
+        return [Turn.model_validate(turn) for turn in json.loads(raw)]
+    except (ValueError, TypeError) as exc:
+        logger.warning("Ignoring malformed history: %s", exc)
+        return []
 
 
 async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
@@ -114,7 +123,7 @@ async def ingest_text(
     req: IngestTextRequest,
     family: dict = Depends(get_current_family),
 ) -> StructuredResult:
-    ctx = await build_llm_context(family, req.now or now(), req.lang)
+    ctx = await build_llm_context(family, req.now or now(), req.lang, req.history)
     result = await get_llm_provider().structure_log(req.text, ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or req.text)
     return await _find_target(result, family, ctx, req.text)
@@ -122,19 +131,20 @@ async def ingest_text(
 
 @router.post("/voice", response_model=IngestVoiceResponse)
 async def ingest_voice(
-    request: Request,
+    file: UploadFile = File(...),
+    lang: Optional[str] = Form(None),
+    at: Optional[datetime] = Form(None, alias="now"),
+    history: str = Form("[]"),
     family: dict = Depends(get_current_family),
-    lang: Optional[str] = None,
-    at: Optional[datetime] = Query(None, alias="now"),
 ) -> IngestVoiceResponse:
-    """Transcribe raw audio (the request body) then structure it, like /text.
+    """Transcribe a recording, then structure it like a typed sentence.
 
-    The audio is the raw request body (Content-Type e.g. audio/wav); this keeps the
-    endpoint dependency-free. `lang` is only a hint — the real transcriber returns
-    whatever language was actually spoken. `now` is the caller's local time, without
-    which "at eight this morning" lands eight hours into a UTC morning nobody lives in.
+    The audio is a multipart field rather than the raw request body, so the chat history
+    can travel with it. `lang` is only a hint: the real transcriber returns whatever was
+    actually spoken. `now` is the caller's local time, without which "at eight this
+    morning" resolves in UTC.
     """
-    audio = await request.body()
+    audio = await file.read()
     if not audio:
         raise HTTPException(status_code=400, detail="Empty audio body")
     if len(audio) > MAX_AUDIO_BYTES:
@@ -143,7 +153,7 @@ async def ingest_voice(
             detail=f"Recording is too long (max {MAX_AUDIO_BYTES // (1024 * 1024)} MB)",
         )
 
-    mime_type = (request.headers.get("content-type") or "").split(";")[0].strip()
+    mime_type = (file.content_type or "").split(";")[0].strip()
     if not mime_type.startswith("audio/"):
         raise HTTPException(
             status_code=415, detail=f"Not an audio recording: {mime_type or 'unknown'}"
@@ -155,7 +165,7 @@ async def ingest_voice(
             status_code=422, detail="I couldn't make that out — say it again?"
         )
 
-    ctx = await build_llm_context(family, at or now(), lang)
+    ctx = await build_llm_context(family, at or now(), lang, _turns(history))
     result = await get_llm_provider().structure_log(transcript, ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     result = await _find_target(result, family, ctx, transcript)
@@ -169,6 +179,7 @@ async def ingest_photo(
     text: str = Form(""),
     lang: Optional[str] = Form(None),
     at: Optional[datetime] = Form(None, alias="now"),
+    history: str = Form("[]"),
     family: dict = Depends(get_current_family),
 ) -> IngestPhotoResponse:
     """A picture, with or without words: "is this rash normal?", or just a first smile.
@@ -184,7 +195,7 @@ async def ingest_photo(
     content_type = file.content_type or ""
     photo_id = await store_photo(data, content_type, family["_id"], baby_id)
 
-    ctx = await build_llm_context(family, at or now(), lang)
+    ctx = await build_llm_context(family, at or now(), lang, _turns(history))
     result = await get_llm_provider().structure_photo(data, content_type, text, ctx)
     for event in result.events:
         event.fields["photo_id"] = photo_id

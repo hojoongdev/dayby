@@ -23,7 +23,11 @@ class _FakeApiClient extends ApiClient {
       const [];
 
   @override
-  Future<StructuredResult> ingestText(String text, {String? lang}) async => result;
+  Future<StructuredResult> ingestText(
+    String text, {
+    String? lang,
+    List<Turn> history = const [],
+  }) async => result;
 
   @override
   Future<Event> createEvent({

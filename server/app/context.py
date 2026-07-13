@@ -1,9 +1,13 @@
-"""The family context every LLM call gets: who the babies are and how old they are."""
+"""The family context every LLM call gets: who the babies are, and what was just said."""
 from datetime import date, datetime
 from typing import Optional
 
 from .db import get_db
-from .models.events import LlmContext
+from .models.events import LlmContext, Turn
+
+# Cap what a client can push into a prompt. Well above what the app sends (10 turns).
+MAX_HISTORY_TURNS = 20
+MAX_TURN_CHARS = 400
 
 
 def age_label(birthdate_iso: Optional[str], ref: date) -> Optional[str]:
@@ -22,10 +26,22 @@ def age_label(birthdate_iso: Optional[str], ref: date) -> Optional[str]:
     return f"{months // 12} years old"
 
 
+def trim_history(history: list[Turn]) -> list[Turn]:
+    """Keep the last MAX_HISTORY_TURNS turns, each cut to MAX_TURN_CHARS."""
+    return [
+        Turn(role=turn.role, text=turn.text[:MAX_TURN_CHARS])
+        for turn in history[-MAX_HISTORY_TURNS:]
+    ]
+
+
 async def build_llm_context(
-    family: dict, now_dt: datetime, lang: Optional[str] = None
+    family: dict,
+    now_dt: datetime,
+    lang: Optional[str] = None,
+    history: Optional[list[Turn]] = None,
 ) -> LlmContext:
-    """Names (for "who") plus name/age/sex profiles (for age-aware answers and tips)."""
+    """Baby names (for "who"), age/sex profiles (for age-aware answers), and the chat
+    history the model resolves references against."""
     names: list[str] = []
     profiles: list[str] = []
     ref = now_dt.date()
@@ -36,4 +52,10 @@ async def build_llm_context(
         details = [d for d in (age_label(baby.get("birthdate"), ref), baby.get("sex")) if d]
         profiles.append(baby["name"] + (f" ({', '.join(details)})" if details else ""))
 
-    return LlmContext(now=now_dt, baby_names=names, baby_profiles=profiles, lang=lang)
+    return LlmContext(
+        now=now_dt,
+        baby_names=names,
+        baby_profiles=profiles,
+        lang=lang,
+        history=trim_history(history or []),
+    )

@@ -14,6 +14,10 @@ import '../tts.dart';
 import '../widgets/confirm_card.dart';
 import '../widgets/glass.dart';
 
+/// How many chat bubbles go to the server as context. Enough for a correction or a
+/// follow-up question without sending the whole day every time.
+const _rememberedTurns = 10;
+
 /// One turn in the conversation.
 class _Msg {
   const _Msg({
@@ -220,6 +224,24 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     );
   }
 
+  /// The chat as shown, which is what the server reads the next utterance against. Error
+  /// bubbles are plumbing, not conversation, so they stay out.
+  List<Turn> _turns() {
+    final said = _history.where((m) => !m.isError).toList();
+    final recent = said.length <= _rememberedTurns
+        ? said
+        : said.sublist(said.length - _rememberedTurns);
+    return [for (final m in recent) Turn(fromUser: m.fromUser, text: _lineOf(m))];
+  }
+
+  /// A bubble as one line of dialogue. The subtitle comes along so a saved event reads as
+  /// saved: an event that was only offered was never written, and must not be corrected.
+  String _lineOf(_Msg m) => [
+        if (m.photo != null) '(sent a photo)',
+        if (m.text.isNotEmpty) m.text,
+        if (m.subtitle != null) '— ${m.subtitle!.toLowerCase()}',
+      ].join(' ');
+
   Future<void> _submit() async {
     final text = _input.text.trim();
     final photo = _photo;
@@ -229,6 +251,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final lang = ref.read(voiceLangProvider);
     final baby = ref.read(activeBabyProvider);
     if (photo != null && baby == null) return;
+    // Read off before the new message is appended: it is the utterance, not the context.
+    final history = _turns();
     _lastText = text;
     _input.clear();
     setState(() {
@@ -240,7 +264,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     _scrollToBottom();
     try {
       final result = photo == null
-          ? await api.ingestText(text, lang: lang)
+          ? await api.ingestText(text, lang: lang, history: history)
           : (await api.ingestPhoto(
               babyId: baby!.id,
               bytes: photo.bytes,
@@ -248,6 +272,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               mimeType: photo.mime,
               text: text,
               lang: lang,
+              history: history,
             ))
               .result;
       if (!mounted) return;

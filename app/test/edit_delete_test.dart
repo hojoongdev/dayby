@@ -39,7 +39,11 @@ class _FakeApiClient extends ApiClient {
   }) async => [_logged];
 
   @override
-  Future<StructuredResult> ingestText(String text, {String? lang}) async => result;
+  Future<StructuredResult> ingestText(
+    String text, {
+    String? lang,
+    List<Turn> history = const [],
+  }) async => result;
 
   @override
   Future<void> deleteEvent(String id) async => deleted = id;

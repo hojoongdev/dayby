@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -139,9 +140,19 @@ class ApiClient {
     return Baby.fromJson(res.data as Map<String, dynamic>);
   }
 
-  Future<StructuredResult> ingestText(String text, {String? lang}) async {
-    final res = await _dio.post('/ingest/text',
-        data: {'text': text, 'lang': ?lang, 'now': _localNowIso()});
+  /// `history` is the chat so far, which is what "actually 200" and "and yesterday?"
+  /// resolve against.
+  Future<StructuredResult> ingestText(
+    String text, {
+    String? lang,
+    List<Turn> history = const [],
+  }) async {
+    final res = await _dio.post('/ingest/text', data: {
+      'text': text,
+      'lang': ?lang,
+      'now': _localNowIso(),
+      'history': [for (final turn in history) turn.toJson()],
+    });
     return StructuredResult.fromJson(res.data as Map<String, dynamic>);
   }
 
@@ -214,12 +225,15 @@ class ApiClient {
     required String mimeType,
     String text = '',
     String? lang,
+    List<Turn> history = const [],
   }) async {
     final form = FormData.fromMap({
       'baby_id': babyId,
       'text': text,
       'lang': ?lang,
       'now': _localNowIso(),
+      // Multipart fields are scalars, so the history goes as a JSON string.
+      'history': jsonEncode([for (final turn in history) turn.toJson()]),
       'file': MultipartFile.fromBytes(
         bytes,
         filename: filename,

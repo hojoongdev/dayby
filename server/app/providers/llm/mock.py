@@ -15,6 +15,7 @@ from ...models.events import (
     CareSignal,
     Confidence,
     LlmContext,
+    Role,
     StructuredEvent,
     StructuredResult,
     Tip,
@@ -35,6 +36,14 @@ def _first_number(text: str) -> int | float | None:
         return None
     value = float(match.group(1))
     return int(value) if value.is_integer() else value
+
+
+def _said_before(ctx: LlmContext) -> str:
+    """The previous user turn, if there was one."""
+    for turn in reversed(ctx.history):
+        if turn.role == Role.user:
+            return turn.text.lower()
+    return ""
 
 
 class MockLLMProvider(LLMProvider):
@@ -144,6 +153,7 @@ class MockLLMProvider(LLMProvider):
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
         lower = text.lower().strip()
         lang = ctx.lang or "en"
+        before = _said_before(ctx)
 
         # Correcting or removing something comes first: "delete the last feeding"
         # also reads as a question about the last feeding.
@@ -158,7 +168,7 @@ class MockLLMProvider(LLMProvider):
             return StructuredResult(
                 action=Action.update,
                 target_hint=text,
-                events=[self._classify(text, lower, ctx.now)],
+                events=[self._classify(text, lower, ctx.now, before)],
                 reply="Change it to that?",
                 lang=lang,
             )
@@ -172,7 +182,7 @@ class MockLLMProvider(LLMProvider):
                 lang=lang,
             )
 
-        event = self._classify(text, lower, ctx.now)
+        event = self._classify(text, lower, ctx.now, before)
         readback = event.type if not event.subtype else f"{event.type} ({event.subtype})"
         return StructuredResult(
             action=Action.create,
@@ -181,15 +191,30 @@ class MockLLMProvider(LLMProvider):
             lang=lang,
         )
 
-    def _classify(self, text: str, lower: str, now: datetime) -> StructuredEvent:
+    def _classify(
+        self, text: str, lower: str, now: datetime, before: str = ""
+    ) -> StructuredEvent:
+        """Pick the event type from the words; take the value only from the new ones.
+
+        "actually 200" names no type, so fall back to the previous turn for that. Never take
+        the number from there, or a correction would re-log the amount it is correcting.
+        """
+        event = self._match(text, lower, now, kinds=lower)
+        if event.type == "memo" and before:
+            event = self._match(text, lower, now, kinds=f"{lower} {before}")
+        return event
+
+    def _match(
+        self, text: str, lower: str, now: datetime, kinds: str
+    ) -> StructuredEvent:
         number = _first_number(lower)
 
-        if any(k in lower for k in ("formula", "breast", "milk", "feed", "solid", "bottle")):
-            if "formula" in lower or "bottle" in lower:
+        if any(k in kinds for k in ("formula", "breast", "milk", "feed", "solid", "bottle")):
+            if "formula" in kinds or "bottle" in kinds:
                 subtype = "formula"
-            elif "breast" in lower or "milk" in lower:
+            elif "breast" in kinds or "milk" in kinds:
                 subtype = "breast"
-            elif "solid" in lower:
+            elif "solid" in kinds:
                 subtype = "solid"
             else:
                 subtype = None
@@ -204,31 +229,31 @@ class MockLLMProvider(LLMProvider):
                 confidence=Confidence.high if subtype else Confidence.medium,
             )
 
-        if any(k in lower for k in ("diaper", "pee", "poop", "wet", "dirty")):
-            if "wet" in lower or "pee" in lower:
+        if any(k in kinds for k in ("diaper", "pee", "poop", "wet", "dirty")):
+            if "wet" in kinds or "pee" in kinds:
                 subtype = "wet"
-            elif "dirty" in lower or "poop" in lower:
+            elif "dirty" in kinds or "poop" in kinds:
                 subtype = "dirty"
             else:
                 subtype = "mixed"
             return StructuredEvent(type="diaper", subtype=subtype, time=now, confidence=Confidence.high)
 
-        if any(k in lower for k in ("sleep", "asleep", "nap", "woke", "awake", "wake")):
-            subtype = "end" if any(k in lower for k in ("woke", "awake", "wake")) else "start"
+        if any(k in kinds for k in ("sleep", "asleep", "nap", "woke", "awake", "wake")):
+            subtype = "end" if any(k in kinds for k in ("woke", "awake", "wake")) else "start"
             return StructuredEvent(type="sleep", subtype=subtype, time=now, confidence=Confidence.high)
 
-        if "pump" in lower:
+        if "pump" in kinds:
             fields = {"amount_ml": number} if number is not None else {}
             return StructuredEvent(type="pumping", fields=fields, time=now, confidence=Confidence.high)
 
-        if any(k in lower for k in ("temp", "temperature", "fever")):
+        if any(k in kinds for k in ("temp", "temperature", "fever")):
             fields = {"celsius": number} if number is not None else {}
             return StructuredEvent(type="temperature", fields=fields, time=now, confidence=Confidence.medium)
 
-        if "bath" in lower:
+        if "bath" in kinds:
             return StructuredEvent(type="bath", time=now, confidence=Confidence.high)
 
-        if any(k in lower for k in ("medicine", "tylenol", "ibuprofen", "vitamin")):
+        if any(k in kinds for k in ("medicine", "tylenol", "ibuprofen", "vitamin")):
             return StructuredEvent(type="medicine", note=text, time=now, confidence=Confidence.medium)
 
         return StructuredEvent(type="memo", note=text, time=now, confidence=Confidence.low)

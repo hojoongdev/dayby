@@ -35,6 +35,20 @@ class Event {
       );
 }
 
+/// One line of the chat, as shown on screen. The "saved" lines go too: an event that was
+/// offered but never confirmed is not in the timeline, and the model has to tell those apart.
+class Turn {
+  const Turn({required this.fromUser, required this.text});
+
+  final bool fromUser;
+  final String text;
+
+  Map<String, dynamic> toJson() => {
+        'role': fromUser ? 'user' : 'assistant',
+        'text': text,
+      };
+}
+
 class StructuredEvent {
   const StructuredEvent({
     required this.type,

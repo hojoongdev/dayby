@@ -19,6 +19,22 @@ class Confidence(str, Enum):
     low = "low"
 
 
+class Role(str, Enum):
+    user = "user"
+    assistant = "assistant"
+
+
+class Turn(BaseModel):
+    """One line of the chat, as it was shown to the user.
+
+    Includes the lines confirming a save: an event that was offered but never confirmed
+    is not in the timeline, and the model has to tell those apart.
+    """
+
+    role: Role
+    text: str
+
+
 # Recommended standard event types. The schema is intentionally open: anything
 # outside this list is still valid (stored as-is with type "other" or a custom type).
 STANDARD_EVENT_TYPES = (
@@ -67,6 +83,8 @@ class LlmContext(BaseModel):
     # e.g. "Haein (5 months old, female)" — lets the model answer/tip by age.
     baby_profiles: list[str] = Field(default_factory=list)
     lang: Optional[str] = None
+    # The chat so far, oldest first. What "actually 200" and "and yesterday?" resolve against.
+    history: list[Turn] = Field(default_factory=list)
 
 
 class IngestTextRequest(BaseModel):
@@ -74,6 +92,7 @@ class IngestTextRequest(BaseModel):
     lang: Optional[str] = None
     baby_ref: Optional[str] = None
     now: Optional[datetime] = None
+    history: list[Turn] = Field(default_factory=list)
 
 
 class IngestVoiceResponse(BaseModel):
