@@ -91,16 +91,38 @@ class _EntryState extends ConsumerState<_Entry> with WidgetsBindingObserver {
   }
 }
 
+/// The same gradient and the same wordmark as the iOS launch screen, in the same place.
+/// Flutter takes over without anything moving: the spinner simply arrives underneath.
 class _Splash extends StatelessWidget {
   const _Splash();
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    final theme = Theme.of(context);
+    return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: GlassBackground()),
-          Center(child: CircularProgressIndicator()),
+          const Positioned.fill(child: GlassBackground()),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Dayby',
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w300,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
