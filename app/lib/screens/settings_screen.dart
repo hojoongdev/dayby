@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api/api_client.dart';
 import '../format.dart';
@@ -220,10 +221,33 @@ class _FamilyCard extends StatelessWidget {
                     );
                   },
                 ),
+                Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.ios_share),
+                    tooltip: 'Share',
+                    onPressed: () => _share(context),
+                  ),
+                ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// The other parent is rarely standing next to you when you set this up, and a code
+  /// on its own means nothing to them. Hand the whole invitation to whichever app they
+  /// would have been sent it in anyway.
+  Future<void> _share(BuildContext context) async {
+    final box = context.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(
+      ShareParams(
+        subject: 'Join our family on Dayby',
+        text: 'Join our family on Dayby with this invite code: $code',
+        // An iPad will not show the sheet unless it is told what it is coming out of.
+        sharePositionOrigin:
+            box == null ? null : box.localToGlobal(Offset.zero) & box.size,
       ),
     );
   }
