@@ -245,6 +245,9 @@ class EventOut(BaseModel):
     time: datetime
     note: Optional[str] = None
     source: Optional[str] = None
+    # Which parent logged it. Null where the server asks nobody to sign in, because then
+    # there is nobody to have been.
+    created_by: Optional[str] = None
     created_at: datetime
 
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_family, get_current_user
+from ..models.auth import UserOut
 from ..models.family import (
     BabyCreate,
     BabyOut,
@@ -74,6 +75,17 @@ async def join_family(
         {"_id": family["_id"]}, {"$addToSet": {"members": user["_id"]}}
     )
     return _family_out(family)
+
+
+@router.get("/families/members", response_model=list[UserOut])
+async def family_members(family: dict = Depends(get_current_family)) -> list[UserOut]:
+    """Who else is in here. The timeline stamps each record with a user id; this is the
+    only way the app can turn one into a name, and answer "did you feed her or did I?"."""
+    cursor = get_db().users.find({"_id": {"$in": family.get("members", [])}})
+    return [
+        UserOut(id=user["_id"], email=user.get("email"), name=user.get("name"))
+        async for user in cursor
+    ]
 
 
 @router.post("/babies", response_model=BabyOut, status_code=201)

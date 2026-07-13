@@ -8,6 +8,7 @@ class Event {
     required this.time,
     this.note,
     this.source,
+    this.createdBy,
     required this.createdAt,
   });
 
@@ -19,6 +20,9 @@ class Event {
   final DateTime time;
   final String? note;
   final String? source;
+
+  /// Which parent logged it. Null on a server that asks nobody to sign in.
+  final String? createdBy;
   final DateTime createdAt;
 
   factory Event.fromJson(Map<String, dynamic> json) => Event(
@@ -31,6 +35,7 @@ class Event {
         time: DateTime.parse(json['time'] as String),
         note: json['note'] as String?,
         source: json['source'] as String?,
+        createdBy: json['created_by'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 }

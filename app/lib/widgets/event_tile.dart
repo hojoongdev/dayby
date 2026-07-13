@@ -15,12 +15,17 @@ class EventTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final units = ref.watch(unitPrefsProvider);
     final photoId = event.fields['photo_id'] as String?;
+    // Only ever the other parent. You already know which of these were yours; what you
+    // are half asleep and wondering at 3am is whether they already did it.
+    final loggedBy = ref.watch(loggedByProvider(event.createdBy));
+    final note = [?event.note, ?loggedBy].join(' · ');
+
     return ListTile(
       leading: photoId != null
           ? PhotoThumb(photoId, size: 40)
           : CircleAvatar(child: Icon(_iconFor(event.type))),
       title: Text(eventSummary(event.type, event.subtype, event.fields, units: units)),
-      subtitle: event.note == null ? null : Text(event.note!),
+      subtitle: note.isEmpty ? null : Text(note),
       trailing: Text(formatClock(event.time)),
     );
   }

@@ -39,18 +39,44 @@ async def _authorize(family_id: str, token: Optional[str]) -> Optional[dict]:
 
 
 async def _forward(websocket: WebSocket, family_id: str) -> None:
-    """Tail this family's new events and push each one out as it lands."""
+    """Tail everything that happens to this family's timeline, and push it out as it lands.
+
+    Not only what is added. One parent saying "actually 200", or taking back a feed they
+    logged twice, has to reach the other's phone as well — otherwise the two of them are
+    looking at different truths and neither has any reason to doubt their own.
+    """
     pipeline = [{
         "$match": {
-            "operationType": "insert",
-            "fullDocument.family_id": family_id,
+            "$or": [
+                # Added or corrected: the record as it now stands.
+                {
+                    "operationType": {"$in": ["insert", "update", "replace"]},
+                    "fullDocument.family_id": family_id,
+                },
+                # Taken back. A delete carries nothing but an id, so without the document
+                # it removed there is no family to match on and no baby whose timeline we
+                # could say had changed. Mongo keeps it for us (see db.py).
+                {
+                    "operationType": "delete",
+                    "fullDocumentBeforeChange.family_id": family_id,
+                },
+            ]
         }
     }]
-    async with await get_db().events.watch(pipeline) as stream:
+    async with await get_db().events.watch(
+        pipeline,
+        full_document="updateLookup",
+        full_document_before_change="whenAvailable",
+    ) as stream:
         async for change in stream:
+            # A record updated and then deleted before the lookup ran leaves neither.
+            doc = change.get("fullDocument") or change.get("fullDocumentBeforeChange")
+            if doc is None:
+                continue
             await websocket.send_json({
                 "type": "event",
-                "event": event_out(change["fullDocument"]).model_dump(mode="json"),
+                "change": change["operationType"],
+                "event": event_out(doc).model_dump(mode="json"),
             })
 
 

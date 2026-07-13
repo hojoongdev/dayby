@@ -36,6 +36,50 @@ def test_one_parent_logs_and_the_other_sees_it(clean_db):
             assert message["event"]["baby_id"] == bid
 
 
+def test_a_correction_reaches_the_other_phone_too(clean_db):
+    """Only inserts used to be forwarded. One parent saying "actually 200" left the other
+    reading 120 for as long as they did not think to pull down and refresh."""
+    with TestClient(app) as c:
+        fid, bid = _family_and_baby(c)
+        eid = c.post(
+            "/events",
+            headers={"X-Family-Id": fid},
+            json={"baby_id": bid, "type": "feeding", "fields": {"amount_ml": 120}},
+        ).json()["id"]
+
+        with c.websocket_connect(f"/ws/events?family_id={fid}") as ws:
+            c.patch(
+                f"/events/{eid}",
+                headers={"X-Family-Id": fid},
+                json={"fields": {"amount_ml": 200}},
+            )
+
+            message = ws.receive_json()
+            assert message["change"] == "update"
+            assert message["event"]["fields"]["amount_ml"] == 200
+
+
+def test_taking_a_record_back_reaches_the_other_phone_too(clean_db):
+    """A delete carries nothing but an id, so the pre-image is the only thing that says
+    whose family it was and whose timeline just changed."""
+    with TestClient(app) as c:
+        fid, bid = _family_and_baby(c)
+        eid = c.post(
+            "/events",
+            headers={"X-Family-Id": fid},
+            json={"baby_id": bid, "type": "diaper", "subtype": "wet"},
+        ).json()["id"]
+
+        with c.websocket_connect(f"/ws/events?family_id={fid}") as ws:
+            c.delete(f"/events/{eid}", headers={"X-Family-Id": fid})
+
+            message = ws.receive_json()
+            assert message["change"] == "delete"
+            # The record that is gone, so the phone knows which timeline to refresh.
+            assert message["event"]["id"] == eid
+            assert message["event"]["baby_id"] == bid
+
+
 def test_another_familys_log_is_not_forwarded(clean_db):
     with TestClient(app) as c:
         fid, _ = _family_and_baby(c)

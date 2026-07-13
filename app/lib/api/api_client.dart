@@ -117,6 +117,15 @@ class ApiClient {
     return Baby.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// The other parent, by name. Each record carries the id of whoever logged it; this
+  /// is the only thing that turns one into a person.
+  Future<List<AuthUser>> familyMembers() async {
+    final res = await _dio.get('/families/members');
+    return (res.data as List)
+        .map((e) => AuthUser.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<Baby>> listBabies() async {
     final res = await _dio.get('/babies');
     return (res.data as List)

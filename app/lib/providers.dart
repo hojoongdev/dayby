@@ -154,6 +154,24 @@ final babiesProvider = FutureProvider<List<Baby>>(
   (ref) => ref.watch(apiClientProvider).listBabies(),
 );
 
+/// Everyone in this family, by id. A server that asks nobody to sign in has nobody in
+/// it, and then no record has an author -- which is honest, so it simply shows none.
+final familyMembersProvider = FutureProvider<Map<String, AuthUser>>((ref) async {
+  if (ref.watch(sessionProvider).value == null) return const {};
+  final members = await ref.watch(apiClientProvider).familyMembers();
+  return {for (final member in members) member.id: member};
+});
+
+/// What to call whoever logged a record: nothing if it was you (you know), and the other
+/// parent's name if it was not. Two people half asleep at 3am need to know which of them
+/// already did it.
+final loggedByProvider = Provider.family<String?, String?>((ref, userId) {
+  if (userId == null) return null;
+  if (userId == ref.watch(sessionProvider).value?.user.id) return null;
+  final member = ref.watch(familyMembersProvider).value?[userId];
+  return member?.name ?? member?.email ?? 'Someone else';
+});
+
 class SelectedBabyIdNotifier extends Notifier<String?> {
   @override
   String? build() => ref.watch(sharedPrefsProvider).getString(selectedBabyIdKey);

@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..db import get_db
-from ..deps import get_current_family, require_baby
+from ..deps import get_caller, get_current_family, require_baby
 from ..models.events import EventCreate, EventOut, EventUpdate
 from ..photos import delete_photo
 from ..util import as_utc, new_id, now
@@ -23,6 +23,7 @@ def event_out(doc: dict) -> EventOut:
         time=doc["time"],
         note=doc.get("note"),
         source=doc.get("source"),
+        created_by=doc.get("created_by"),
         created_at=doc["created_at"],
     )
 
@@ -57,6 +58,7 @@ async def _minutes_asleep(
 async def create_event(
     body: EventCreate,
     family: dict = Depends(get_current_family),
+    caller: Optional[dict] = Depends(get_caller),
 ) -> EventOut:
     await require_baby(family, body.baby_id)
     doc = {
@@ -70,6 +72,9 @@ async def create_event(
         "note": body.note,
         "source": body.source,
         "raw_text": body.raw_text,
+        # Never taken from the client. Two parents share one timeline, and "did you feed
+        # her or did I?" is not a question it should be possible to lie about.
+        "created_by": caller["_id"] if caller else None,
         "created_at": now(),
     }
 

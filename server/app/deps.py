@@ -27,6 +27,18 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     return user
 
 
+async def get_caller(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+    """Who is asking — when there is anybody to be.
+
+    With no identity provider configured the family is named in a header, and there is no
+    person behind the request. An event logged that way has no author, and saying so is
+    more honest than inventing one. It is a bypass, not a login.
+    """
+    if not settings.auth_enabled:
+        return None
+    return await get_current_user(authorization)
+
+
 async def get_current_family(
     authorization: Optional[str] = Header(None),
     x_family_id: Optional[str] = Header(None, alias="X-Family-Id"),
