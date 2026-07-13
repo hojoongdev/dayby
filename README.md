@@ -2,10 +2,10 @@
 
 [![CI](https://github.com/hojoongdev/dayby/actions/workflows/ci.yml/badge.svg)](https://github.com/hojoongdev/dayby/actions/workflows/ci.yml)
 
-**Voice-first baby-care logging for parents.** Say one sentence — an LLM structures it
-into a record, your partner sees it in real time, and you get charts plus
-natural-language analysis. Designed to be used every day, one-handed, while holding a
-newborn: an iOS Action button or Shortcut logs an entry without even opening the app.
+**Voice-first baby-care logging for parents.** Say one sentence — an LLM turns it into a
+record, your partner's phone shows it a moment later, and you can ask about it afterwards
+in plain language and be answered from your own logs. Built to be used one-handed, while
+holding a newborn.
 
 > Personal / portfolio project. It showcases three things working together:
 > **MongoDB** (flexible document modeling for open-ended event data),
@@ -17,17 +17,16 @@ newborn: an iOS Action button or Shortcut logs an entry without even opening the
 
 ```
 [Flutter app (iOS-first)]
-  - Recording UI (mic / waveform / TTS reply)
-  - Timeline, stats, analysis screens
-  - Swift bridge: App Intents (Shortcuts, Action button, widgets)
+  - Chat: record -> confirm card -> save; spoken replies
+  - Home dashboard, timeline, keepsake
         |  HTTPS
         v
 [FastAPI server (Python)]
   - Auth abstraction  (mock / Google; sessions + refresh)
-  - STT abstraction   (cloud / on-device / multimodal)
-  - LLM abstraction   (swappable provider)
+  - STT abstraction   (mock / Gemini audio)
+  - LLM abstraction   (mock / Gemini)
   - Ingest pipeline   (text / voice / photo -> create/update/delete/query)
-  - Stats aggregation + LLM analysis
+  - Aggregations -> LLM (proactive tips, the keepsake)
   - Change stream -> WebSocket (live family sync)
         |
         v
@@ -36,29 +35,35 @@ newborn: an iOS Action button or Shortcut logs an entry without even opening the
 
 Every API key (LLM / STT) lives **only on the server** — never in the app.
 
+Not built yet: charts, and the Swift side (App Intents, Action button, widgets).
+
 ## Tech stack
 
 | Layer | Choice | Notes |
 |---|---|---|
 | App | Flutter (iOS first) | Android later |
-| iOS integration | Swift + App Intents / WidgetKit | Shortcuts, Action button, widgets |
 | Server | Python + FastAPI | async |
 | Database | MongoDB (async PyMongo) | flexible document schema is the point |
 | STT | provider abstraction | mock / Gemini audio, swappable |
 | LLM | provider abstraction | mock / Gemini, swappable |
 | Auth | provider abstraction | mock / Google, swappable |
+| iOS integration | Swift + App Intents / WidgetKit | **planned, not built** |
 
 ## Status
 
 Built in vertical slices — each phase ends in a running, demoable state.
 
-- P1 — Server + DB + text logging — done
-- P2 — Flutter app + voice (conversational chat, on-device STT, spoken replies) — done
-- P3 — Query + conversation context + multiple babies — done; editing and deleting
-  past entries by voice is still open
-- P4 — Stats + real-time family sync — done
-- **P5 — iOS Shortcuts / Action button / widgets** *(next; needs Xcode and a device)*
-- P6 — LLM analysis + polish
+- P1 — Server + DB + text logging — **done**
+- P2 — Flutter app + voice: conversational chat, spoken replies, photos — **done**
+- P3 — Conversation context, query, edit / delete by voice, multiple babies — **done**
+- P4 — Real-time family sync — **done**. Charts are not: the aggregations exist (they are
+  what the home dashboard and the keepsake are written from) but there is no chart screen.
+- P5 — iOS Shortcuts / Action button / widgets — **not started**; needs Swift and a device
+- P6 — LLM analysis — **done** (answers grounded in your own logs, proactive tips, the
+  keepsake); polish is ongoing
+
+Verified on a real iPhone: recording, upload, transcription. The one thing still to confirm
+on a device is where the silence detector decides a sentence has ended — see `voice.dart`.
 
 ## Quickstart
 
@@ -106,24 +111,41 @@ cd app && flutter run --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.
 - **No language to choose.** `POST /ingest/voice` transcribes with Gemini audio, which
   is told nothing about the language and returns whatever was actually said — Korean,
   English, or a switch mid-sentence. On-device recognition has to be handed a locale
-  first, which is the only reason the app still carries a KO/EN toggle.
+  first; moving the listening to the server is what let the app delete its KO/EN toggle.
+- **The chat is the memory.** What the assistant is given of the conversation is exactly
+  the bubbles on the screen, the ones reporting a save included — so "actually 200"
+  corrects the feed that really got written, never one that was merely offered and then
+  cancelled. It is shown no ids, so it cannot name a record that does not exist: it picks
+  from real records by position, and the caregiver confirms which one before anything
+  happens to it.
+- **The room sets the threshold.** With the server doing the listening, the app has to
+  decide for itself when a sentence has ended. A real iPhone in a real room reads a noise
+  floor of -29 dBFS where a quiet bedroom reads -50, so no hardcoded level survives both.
+  It measures the room at the top of every recording instead. It can fail only one way:
+  the recording runs on and you tap stop, never that it cuts you off mid-sentence.
 
 ## Repository layout
 
 ```
 dayby/
-├── docker-compose.yml     # FastAPI + MongoDB (local dev)
+├── docker-compose.yml       # FastAPI + MongoDB (local dev)
 ├── .env.example
-├── server/                # FastAPI
-│   └── app/
-│       ├── main.py
-│       ├── config.py
-│       ├── db.py
-│       ├── providers/     # llm/ , stt/  (interface + mock + real)
-│       └── prompts/       # structuring / analysis prompts
-├── app/                   # Flutter (added in P2)
-│   └── ios/               # Swift: App Intents, widgets, bridge
-└── docs/
+├── server/                  # FastAPI
+│   ├── app/
+│   │   ├── routers/         # ingest, events, families, photos, assistant, wrapped, live, auth
+│   │   ├── providers/       # llm/ , stt/ , auth/  (interface + mock + real)
+│   │   │   └── llm/prompt.py  # every instruction the model is ever given
+│   │   ├── models/
+│   │   ├── care.py          # what "overdue" means, shared by the server and the mock
+│   │   └── context.py       # the babies and the chat every LLM call is handed
+│   └── tests/
+└── app/                     # Flutter
+    ├── lib/
+    │   ├── screens/         # home, log (chat), timeline, settings, wrapped
+    │   ├── voice.dart       # recording, and when a sentence has ended
+    │   └── api/
+    ├── test/
+    └── ios/
 ```
 
 ## License
