@@ -85,6 +85,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ],
+          const _SectionHeader('Assistant'),
+          const _AssistantSection(),
           const _SectionHeader('Units'),
           const _UnitsSection(),
           // Offered only where there is a sensor to ask.
@@ -227,6 +229,23 @@ class _FamilyCard extends StatelessWidget {
   }
 }
 
+/// The language the assistant answers in where there is nothing to detect it from: the
+/// tips on Home, and the wrapped story. What you say to it is always worked out from the
+/// words themselves, which is why there is no longer a toggle on the Log tab.
+class _AssistantSection extends ConsumerWidget {
+  const _AssistantSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _dropdownTile(
+      'Language',
+      ref.watch(assistantLangProvider),
+      const {'ko': 'Korean', 'en': 'English'},
+      (v) => ref.read(assistantLangProvider.notifier).set(v),
+    );
+  }
+}
+
 class _UnitsSection extends ConsumerWidget {
   const _UnitsSection();
 
@@ -236,34 +255,34 @@ class _UnitsSection extends ConsumerWidget {
     final n = ref.read(unitPrefsProvider.notifier);
     return Column(
       children: [
-        _tile('Temperature', u.temp, const {'c': '°C', 'f': '°F'},
+        _dropdownTile('Temperature', u.temp, const {'c': '°C', 'f': '°F'},
             (v) => n.set(temp: v)),
-        _tile('Weight', u.weight, const {'kg': 'kg', 'g': 'g', 'lb': 'lb'},
+        _dropdownTile('Weight', u.weight, const {'kg': 'kg', 'g': 'g', 'lb': 'lb'},
             (v) => n.set(weight: v)),
-        _tile('Length', u.length, const {'cm': 'cm', 'm': 'm', 'in': 'inch'},
+        _dropdownTile('Length', u.length, const {'cm': 'cm', 'm': 'm', 'in': 'inch'},
             (v) => n.set(length: v)),
-        _tile('Feeding volume', u.volume, const {'ml': 'ml', 'oz': 'oz'},
+        _dropdownTile('Feeding volume', u.volume, const {'ml': 'ml', 'oz': 'oz'},
             (v) => n.set(volume: v)),
       ],
     );
   }
+}
 
-  Widget _tile(String label, String value, Map<String, String> options,
-      ValueChanged<String> onChanged) {
-    return ListTile(
-      title: Text(label),
-      trailing: DropdownButton<String>(
-        value: value,
-        items: [
-          for (final e in options.entries)
-            DropdownMenuItem(value: e.key, child: Text(e.value)),
-        ],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
-    );
-  }
+Widget _dropdownTile(String label, String value, Map<String, String> options,
+    ValueChanged<String> onChanged) {
+  return ListTile(
+    title: Text(label),
+    trailing: DropdownButton<String>(
+      value: value,
+      items: [
+        for (final e in options.entries)
+          DropdownMenuItem(value: e.key, child: Text(e.value)),
+      ],
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+    ),
+  );
 }
 
 class _SectionHeader extends StatelessWidget {

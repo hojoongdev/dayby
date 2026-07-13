@@ -28,14 +28,21 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dayby listens so you can log a feed or a nappy change with one hand, while holding the baby.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>What you say is turned into text so Dayby can work out what to record.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo of a rash or a first smile and keep it with the record it belongs to.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Attach a photo you have already taken to the record it belongs to.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID keeps your baby's records to you, if you ask Dayby to lock.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Dayby reaches the family's own server, which may be running on your network.</string>
+	<!-- Only the private ranges and .local, so a server on your own network can be
+	     reached over plain HTTP. ATS still holds for everything on the internet. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

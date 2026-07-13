@@ -41,7 +41,6 @@ class _FakeApiClient extends ApiClient {
   @override
   Future<StructuredResult> ingestText(
     String text, {
-    String? lang,
     List<Turn> history = const [],
   }) async => result;
 

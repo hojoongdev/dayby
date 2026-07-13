@@ -20,7 +20,7 @@ const familyIdKey = 'family_id';
 const familyNameKey = 'family_name';
 const inviteCodeKey = 'invite_code';
 const selectedBabyIdKey = 'selected_baby_id';
-const voiceLangKey = 'voice_lang';
+const assistantLangKey = 'assistant_lang';
 const appLockKey = 'app_lock';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -249,7 +249,7 @@ final photoProvider = FutureProvider.family<Uint8List, String>(
 final tipsProvider = FutureProvider.family<AssistantTips, String>(
   (ref, babyId) => ref.watch(apiClientProvider).tips(
         babyId: babyId,
-        lang: ref.watch(voiceLangProvider),
+        lang: ref.watch(assistantLangProvider),
       ),
 );
 
@@ -257,24 +257,26 @@ final tipsProvider = FutureProvider.family<AssistantTips, String>(
 final wrappedProvider = FutureProvider.family<Wrapped, String>(
   (ref, babyId) => ref.watch(apiClientProvider).wrapped(
         babyId: babyId,
-        lang: ref.watch(voiceLangProvider),
+        lang: ref.watch(assistantLangProvider),
       ),
 );
 
-/// Spoken language for voice input ("ko" | "en"). Sets the STT locale and the
-/// hint sent to the LLM. Defaults to Korean — Dayby is a Korean-first app.
-class VoiceLangNotifier extends Notifier<String> {
+/// The language the assistant speaks back in ("ko" | "en"), for the surfaces where
+/// nobody has said anything for it to detect: the tips on Home and the wrapped story.
+/// What the caregiver *says* is always detected from the words themselves.
+/// Defaults to Korean — Dayby is a Korean-first app.
+class AssistantLangNotifier extends Notifier<String> {
   @override
-  String build() => ref.watch(sharedPrefsProvider).getString(voiceLangKey) ?? 'ko';
+  String build() => ref.watch(sharedPrefsProvider).getString(assistantLangKey) ?? 'ko';
 
   Future<void> set(String lang) async {
-    await ref.read(sharedPrefsProvider).setString(voiceLangKey, lang);
+    await ref.read(sharedPrefsProvider).setString(assistantLangKey, lang);
     state = lang;
   }
 }
 
-final voiceLangProvider =
-    NotifierProvider<VoiceLangNotifier, String>(VoiceLangNotifier.new);
+final assistantLangProvider =
+    NotifierProvider<AssistantLangNotifier, String>(AssistantLangNotifier.new);
 
 /// The caregiver's preferred display units, persisted.
 class UnitPrefsNotifier extends Notifier<UnitPrefs> {

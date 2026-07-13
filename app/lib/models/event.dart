@@ -80,6 +80,21 @@ class StructuredEvent {
       );
 }
 
+/// What comes back from a recording: what the server heard, and what it made of it. The
+/// transcript is what goes in the chat bubble — with the server transcribing, it is the
+/// first sight the caregiver gets of the words that were understood.
+class IngestVoiceResult {
+  const IngestVoiceResult({required this.transcript, required this.result});
+
+  final String transcript;
+  final StructuredResult result;
+
+  factory IngestVoiceResult.fromJson(Map<String, dynamic> json) => IngestVoiceResult(
+        transcript: json['transcript'] as String,
+        result: StructuredResult.fromJson(json['result'] as Map<String, dynamic>),
+      );
+}
+
 /// What comes back from a photo: where it was stored, and what the model made of it.
 /// The photo id is already inside every event's `fields`, so saving keeps them together.
 class IngestPhotoResult {

@@ -24,7 +24,6 @@ class _FailingApiClient extends ApiClient {
   @override
   Future<StructuredResult> ingestText(
     String text, {
-    String? lang,
     List<Turn> history = const [],
   }) async {
     throw DioException(

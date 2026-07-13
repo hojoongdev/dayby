@@ -141,19 +141,37 @@ class ApiClient {
   }
 
   /// `history` is the chat so far, which is what "actually 200" and "and yesterday?"
-  /// resolve against.
+  /// resolve against. No language is sent: the server works out what was said in.
   Future<StructuredResult> ingestText(
     String text, {
-    String? lang,
     List<Turn> history = const [],
   }) async {
     final res = await _dio.post('/ingest/text', data: {
       'text': text,
-      'lang': ?lang,
       'now': _localNowIso(),
       'history': [for (final turn in history) turn.toJson()],
     });
     return StructuredResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// The recording itself. The server transcribes it and structures the result, so the
+  /// app never has to be told which language to listen for.
+  Future<IngestVoiceResult> ingestVoice({
+    required Uint8List bytes,
+    required String mimeType,
+    List<Turn> history = const [],
+  }) async {
+    final form = FormData.fromMap({
+      'now': _localNowIso(),
+      'history': jsonEncode([for (final turn in history) turn.toJson()]),
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: 'speech.wav',
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    });
+    final res = await _dio.post('/ingest/voice', data: form);
+    return IngestVoiceResult.fromJson(res.data as Map<String, dynamic>);
   }
 
   Future<Event> createEvent({
@@ -224,13 +242,11 @@ class ApiClient {
     required String filename,
     required String mimeType,
     String text = '',
-    String? lang,
     List<Turn> history = const [],
   }) async {
     final form = FormData.fromMap({
       'baby_id': babyId,
       'text': text,
-      'lang': ?lang,
       'now': _localNowIso(),
       // Multipart fields are scalars, so the history goes as a JSON string.
       'history': jsonEncode([for (final turn in history) turn.toJson()]),

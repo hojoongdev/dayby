@@ -1,9 +1,9 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 
 import '../api/api_client.dart';
 import '../format.dart';
@@ -11,6 +11,7 @@ import '../models/event.dart';
 import '../models/family.dart';
 import '../providers.dart';
 import '../tts.dart';
+import '../voice.dart';
 import '../widgets/confirm_card.dart';
 import '../widgets/glass.dart';
 
@@ -62,11 +63,12 @@ class LogScreen extends ConsumerStatefulWidget {
 class _LogScreenState extends ConsumerState<LogScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
-  final SpeechToText _speech = SpeechToText();
+  final VoiceRecorder _voice = VoiceRecorder();
   final Tts _tts = Tts();
-  bool _speechAvailable = false;
+  StreamSubscription<double>? _levels;
+  bool _voiceAvailable = false;
   bool _listening = false;
-  bool _voiceArmed = false;
+  double _level = 0;
   bool _muted = false;
 
   final List<_Msg> _history = [];
@@ -79,37 +81,28 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   @override
   void initState() {
     super.initState();
-    _initSpeech();
+    _initVoice();
   }
 
   @override
   void dispose() {
-    if (_listening) _speech.cancel();
+    _levels?.cancel();
+    _voice.dispose();
     _tts.stop();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
-  Future<void> _initSpeech() async {
+  Future<void> _initVoice() async {
     try {
-      final available = await _speech.initialize(
-        onStatus: (s) {
-          if (!mounted || s == 'listening') return;
-          if (_voiceArmed) {
-            _finishVoice(); // pause/timeout -> auto-send, no button needed
-          } else if (_listening) {
-            setState(() => _listening = false);
-          }
-        },
-        onError: (_) {
-          _voiceArmed = false;
-          if (mounted) setState(() => _listening = false);
-        },
-      );
-      if (mounted) setState(() => _speechAvailable = available);
+      final available = await _voice.isSupported();
+      _levels = _voice.level.listen((l) {
+        if (mounted) setState(() => _level = l);
+      });
+      if (mounted) setState(() => _voiceAvailable = available);
     } catch (_) {
-      if (mounted) setState(() => _speechAvailable = false);
+      if (mounted) setState(() => _voiceAvailable = false);
     }
   }
 
@@ -127,39 +120,61 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   Future<void> _toggleMic() async {
     if (_listening) {
-      await _speech.stop();
-      _finishVoice();
+      await _finishVoice();
       return;
     }
-    final lang = ref.read(voiceLangProvider);
-    _voiceArmed = true;
-    setState(() => _listening = true);
-    await _speech.listen(
-      onResult: (result) {
-        setState(() {
-          _input.text = result.recognizedWords;
-          _input.selection =
-              TextSelection.collapsed(offset: _input.text.length);
-        });
-        if (result.finalResult) _finishVoice();
-      },
-      listenOptions: SpeechListenOptions(
-        partialResults: true,
-        localeId: lang == 'ko' ? 'ko-KR' : 'en-US',
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 2),
-      ),
-    );
+    if (!await _voice.hasPermission()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dayby needs the microphone to hear you.')),
+      );
+      return;
+    }
+    try {
+      await _voice.start(onEnd: _finishVoice);
+      if (mounted) setState(() => _listening = true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
   }
 
-  /// End the voice session and auto-send whatever was heard — so the caregiver
-  /// never has to reach for the send button.
-  void _finishVoice() {
-    if (!_voiceArmed || !mounted) return;
-    _voiceArmed = false;
-    final hasText = _input.text.trim().isNotEmpty;
-    setState(() => _listening = false);
-    if (hasText) _submit();
+  /// They stopped talking, or they tapped stop. Either way the recording goes off to be
+  /// transcribed without anyone reaching for a send button — the whole point of the mic.
+  Future<void> _finishVoice() async {
+    if (!_listening || !mounted) return;
+    setState(() {
+      _listening = false;
+      _level = 0;
+    });
+    final audio = await _voice.stop();
+    if (audio == null || !mounted) return;
+    await _sendVoice(audio);
+  }
+
+  Future<void> _sendVoice(Uint8List audio) async {
+    final history = _turns();
+    setState(() {
+      _pending = null;
+      _thinking = true;
+    });
+    _scrollToBottom();
+    try {
+      final heard = await ref.read(apiClientProvider).ingestVoice(
+            bytes: audio,
+            mimeType: VoiceRecorder.mimeType,
+            history: history,
+          );
+      if (!mounted) return;
+      // The transcript is the caregiver's own bubble: with the server listening, this is
+      // the first they see of the words it understood.
+      _lastText = heard.transcript;
+      setState(() => _history.add(_Msg(fromUser: true, text: heard.transcript)));
+      _handleResult(heard.result);
+    } catch (e) {
+      _showFailure(e);
+    }
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -248,7 +263,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     // A picture on its own is a perfectly good log.
     if ((text.isEmpty && photo == null) || _thinking) return;
     final api = ref.read(apiClientProvider);
-    final lang = ref.read(voiceLangProvider);
     final baby = ref.read(activeBabyProvider);
     if (photo != null && baby == null) return;
     // Read off before the new message is appended: it is the utterance, not the context.
@@ -264,49 +278,58 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     _scrollToBottom();
     try {
       final result = photo == null
-          ? await api.ingestText(text, lang: lang, history: history)
+          ? await api.ingestText(text, history: history)
           : (await api.ingestPhoto(
               babyId: baby!.id,
               bytes: photo.bytes,
               filename: photo.filename,
               mimeType: photo.mime,
               text: text,
-              lang: lang,
               history: history,
             ))
               .result;
       if (!mounted) return;
-      setState(() {
-        _thinking = false;
-        if (result.settings != null && result.settings!.isNotEmpty) {
-          _applySettings(result.settings!);
-        }
-        final reply = result.reply;
-        if (reply != null && reply.isNotEmpty) {
-          _history.add(_Msg(fromUser: false, text: reply));
-        }
-        if (result.action == 'create' && result.events.isNotEmpty) {
-          _pending = result;
-        } else if ((result.isUpdate || result.isDelete) && result.target != null) {
-          // Something real is about to be changed or removed. Show which, and ask.
-          _pending = result;
-        } else if (reply == null || reply.isEmpty) {
-          _history.add(_Msg(fromUser: false, text: _fallback(result)));
-        }
-      });
-      final reply = result.reply;
-      if (!_muted && reply != null && reply.isNotEmpty) {
-        _tts.speak(reply, lang: result.lang);
-      }
-      _scrollToBottom();
+      _handleResult(result);
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _thinking = false;
-        _history.add(_Msg(fromUser: false, text: friendlyError(e), isError: true));
-      });
-      _scrollToBottom();
+      _showFailure(e);
     }
+  }
+
+  /// What the app makes of the server's answer, however the utterance got there — typed,
+  /// photographed or spoken.
+  void _handleResult(StructuredResult result) {
+    setState(() {
+      _thinking = false;
+      if (result.settings != null && result.settings!.isNotEmpty) {
+        _applySettings(result.settings!);
+      }
+      final reply = result.reply;
+      if (reply != null && reply.isNotEmpty) {
+        _history.add(_Msg(fromUser: false, text: reply));
+      }
+      if (result.action == 'create' && result.events.isNotEmpty) {
+        _pending = result;
+      } else if ((result.isUpdate || result.isDelete) && result.target != null) {
+        // Something real is about to be changed or removed. Show which, and ask.
+        _pending = result;
+      } else if (reply == null || reply.isEmpty) {
+        _history.add(_Msg(fromUser: false, text: _fallback(result)));
+      }
+    });
+    final reply = result.reply;
+    if (!_muted && reply != null && reply.isNotEmpty) {
+      _tts.speak(reply, lang: result.lang);
+    }
+    _scrollToBottom();
+  }
+
+  void _showFailure(Object e) {
+    if (!mounted) return;
+    setState(() {
+      _thinking = false;
+      _history.add(_Msg(fromUser: false, text: friendlyError(e), isError: true));
+    });
+    _scrollToBottom();
   }
 
   void _applySettings(Map<String, dynamic> s) {
@@ -457,7 +480,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   Widget build(BuildContext context) {
     final babies = ref.watch(babiesProvider).value ?? const <Baby>[];
     final active = ref.watch(activeBabyProvider);
-    final voiceLang = ref.watch(voiceLangProvider);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -473,13 +495,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             },
             icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
           ),
-          if (_speechAvailable)
-            TextButton(
-              onPressed: () => ref
-                  .read(voiceLangProvider.notifier)
-                  .set(voiceLang == 'ko' ? 'en' : 'ko'),
-              child: Text(voiceLang == 'ko' ? 'KO' : 'EN'),
-            ),
         ],
       ),
       body: Stack(
@@ -770,7 +785,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   }
 
   Widget _composeBar(Baby? active) {
-    final theme = Theme.of(context);
     final canType = active != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
@@ -784,14 +798,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Row(
               children: [
-                IconButton(
-                  onPressed: _speechAvailable && canType ? _toggleMic : null,
-                  tooltip: _listening ? 'Stop' : 'Speak',
-                  color: _listening
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.primary,
-                  icon: Icon(_listening ? Icons.stop_circle : Icons.mic),
-                ),
+                _mic(canType),
                 IconButton(
                   onPressed: canType ? _attachSheet : null,
                   tooltip: 'Attach a photo',
@@ -819,6 +826,40 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The words no longer appear as they are spoken — the server does the listening now —
+  /// so the button has to show that the mic is alive. It swells with your voice.
+  Widget _mic(bool canType) {
+    final theme = Theme.of(context);
+    if (!_listening) {
+      return IconButton(
+        onPressed: _voiceAvailable && canType ? _toggleMic : null,
+        tooltip: 'Speak',
+        color: theme.colorScheme.primary,
+        icon: const Icon(Icons.mic),
+      );
+    }
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 24 + _level * 22,
+          height: 24 + _level * 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: theme.colorScheme.error.withValues(alpha: 0.25),
+          ),
+        ),
+        IconButton(
+          onPressed: _toggleMic,
+          tooltip: 'Stop',
+          color: theme.colorScheme.error,
+          icon: const Icon(Icons.stop_circle),
+        ),
+      ],
     );
   }
 

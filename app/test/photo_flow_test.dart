@@ -55,7 +55,6 @@ class _FakeApiClient extends ApiClient {
     required String filename,
     required String mimeType,
     String text = '',
-    String? lang,
     List<Turn> history = const [],
   }) async {
     sentText = text;
