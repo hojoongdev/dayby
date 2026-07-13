@@ -2,7 +2,7 @@
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
 from ..config import settings
 from ..db import get_db
@@ -112,6 +112,49 @@ async def family_members(family: dict = Depends(get_current_family)) -> list[Use
     """Who else is in here. The timeline stamps each record with a user id; this is the
     only way the app can turn one into a name, and answer "did you feed her or did I?"."""
     cursor = get_db().users.find({"_id": {"$in": family.get("members", [])}})
+    return [
+        UserOut(id=user["_id"], email=user.get("email"), name=user.get("name"))
+        async for user in cursor
+    ]
+
+
+@router.post("/families/leave", status_code=204)
+async def leave_family(
+    user: dict = Depends(get_current_user),
+    family: dict = Depends(get_current_family),
+) -> Response:
+    """Take yourself out of the family. The last member cannot: leaving would strand the
+    babies and the timeline with nobody able to reach them."""
+    members = family.get("members", [])
+    if len(members) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="You are the only member; there is no one to leave it to.",
+        )
+    await get_db().families.update_one(
+        {"_id": family["_id"]}, {"$pull": {"members": user["_id"]}}
+    )
+    return Response(status_code=204)
+
+
+@router.delete("/families/members/{user_id}", response_model=list[UserOut])
+async def remove_member(
+    user_id: str,
+    family: dict = Depends(get_current_family),
+) -> list[UserOut]:
+    """Remove someone else from the family. Any member can; the model is a flat set of
+    peers, not an owner and guests. The last member cannot be removed."""
+    members = family.get("members", [])
+    if user_id not in members:
+        raise HTTPException(status_code=404, detail="No such member in this family")
+    if len(members) <= 1:
+        raise HTTPException(status_code=409, detail="A family cannot be left with no members.")
+
+    await get_db().families.update_one(
+        {"_id": family["_id"]}, {"$pull": {"members": user_id}}
+    )
+    remaining = [m for m in members if m != user_id]
+    cursor = get_db().users.find({"_id": {"$in": remaining}})
     return [
         UserOut(id=user["_id"], email=user.get("email"), name=user.get("name"))
         async for user in cursor
