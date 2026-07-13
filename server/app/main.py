@@ -22,8 +22,20 @@ from .routers import (
 logger = logging.getLogger("dayby")
 
 
+def guard_config() -> None:
+    """Refuse a deployment that would sign real sessions with the shipped default secret --
+    anyone who read the source could forge a token for it. Called at startup."""
+    if settings.auth_enabled and not settings.is_development and settings.jwt_secret_is_placeholder:
+        raise RuntimeError(
+            "JWT_SECRET is still the default. Set a real secret before enabling auth "
+            "outside development."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    guard_config()
+
     if await ping():
         logger.info("Connected to MongoDB.")
         await ensure_indexes()

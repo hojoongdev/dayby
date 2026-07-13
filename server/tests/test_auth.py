@@ -7,8 +7,8 @@ membership, and the boundaries between families.
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
-from app.main import app
+from app.config import DEFAULT_JWT_SECRET, settings
+from app.main import app, guard_config
 
 
 @pytest.fixture
@@ -115,3 +115,24 @@ def test_the_app_is_told_whether_to_ask_for_a_sign_in(clean_db):
     with TestClient(app) as c:
         off = c.get("/auth/config").json()
         assert off == {"enabled": False, "provider": "none"}
+
+
+def test_a_placeholder_secret_is_refused_outside_development(monkeypatch):
+    monkeypatch.setattr(settings, "auth_provider", "google")
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "jwt_secret", DEFAULT_JWT_SECRET)
+    with pytest.raises(RuntimeError):
+        guard_config()
+
+
+def test_a_real_secret_passes(monkeypatch):
+    monkeypatch.setattr(settings, "auth_provider", "google")
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "jwt_secret", "a-real-deployment-secret")
+    guard_config()  # does not raise
+
+
+def test_development_tolerates_the_default_secret(monkeypatch):
+    # Auth on, but locally: the default secret is not worth refusing to start over.
+    monkeypatch.setattr(settings, "auth_provider", "mock")
+    guard_config()  # does not raise

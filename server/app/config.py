@@ -1,6 +1,16 @@
 """Application settings, loaded from environment variables (12-factor)."""
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The out-of-the-box secret. Fine for local development, never for a deployment that signs
+# real sessions -- anyone who reads this file could forge a token signed with it.
+DEFAULT_JWT_SECRET = "change-me-in-production"
+
+# Every placeholder that ships in the repo: this default and the one docker-compose.yml
+# falls back to. None may sign real sessions, so a deployment must set its own.
+PLACEHOLDER_JWT_SECRETS = frozenset(
+    {DEFAULT_JWT_SECRET, "dev-secret-not-for-production-generate-a-real-one"}
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -25,7 +35,7 @@ class Settings(BaseSettings):
     # sign-in flow with no keys (development only). "google" verifies real ID tokens.
     auth_provider: str = "none"
     google_client_id: str = ""
-    jwt_secret: str = "change-me-in-production"
+    jwt_secret: str = DEFAULT_JWT_SECRET
     access_token_ttl_minutes: int = 30
     refresh_token_ttl_days: int = 60
 
@@ -47,6 +57,10 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.app_env == "development"
+
+    @property
+    def jwt_secret_is_placeholder(self) -> bool:
+        return self.jwt_secret in PLACEHOLDER_JWT_SECRETS
 
     # CORS: comma-separated browser origins allowed to call the API
     # (the Flutter web client). "*" is fine for local dev; lock this down in prod.
