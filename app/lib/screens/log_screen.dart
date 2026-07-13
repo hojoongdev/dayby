@@ -418,6 +418,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final units = ref.read(unitPrefsProvider);
     ref.invalidate(eventsProvider(babyId));
     ref.invalidate(tipsProvider(babyId));
+    ref.invalidate(statsProvider(babyId));
     setState(() {
       _saving = false;
       _pending = null;
@@ -459,6 +460,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     ref.invalidate(eventsProvider(saved.babyId));
     // The new event may be exactly what the assistant was nudging about.
     ref.invalidate(tipsProvider(saved.babyId));
+    ref.invalidate(statsProvider(saved.babyId));
     setState(() {
       _saving = false;
       _pending = null;

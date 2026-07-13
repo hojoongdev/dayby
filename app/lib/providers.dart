@@ -12,6 +12,7 @@ import 'lang.dart';
 import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
+import 'models/stats.dart';
 import 'models/tip.dart';
 import 'models/wrapped.dart';
 import 'reminders.dart';
@@ -280,6 +281,12 @@ final tipsProvider = FutureProvider.family<AssistantTips, String>(
         babyId: babyId,
         lang: ref.watch(assistantLangProvider),
       ),
+);
+
+/// The charts. Invalidated on every save and on the other parent's, like the timeline:
+/// a chart that does not move when you log something is a chart nobody trusts.
+final statsProvider = FutureProvider.family<Stats, String>(
+  (ref, babyId) => ref.watch(apiClientProvider).stats(babyId: babyId),
 );
 
 /// The lifetime retrospective for one baby.

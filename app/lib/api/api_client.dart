@@ -7,6 +7,7 @@ import '../auth.dart';
 import '../config.dart';
 import '../models/event.dart';
 import '../models/family.dart';
+import '../models/stats.dart';
 import '../models/tip.dart';
 import '../models/wrapped.dart';
 
@@ -292,6 +293,17 @@ class ApiClient {
       'now': _localNowIso(),
     });
     return AssistantTips.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// The numbers behind the charts. `now` carries this phone's offset, which is what
+  /// makes a "day" on the chart mean the day they actually had.
+  Future<Stats> stats({required String babyId, int days = 14}) async {
+    final res = await _dio.get('/stats', queryParameters: {
+      'baby_id': babyId,
+      'days': days,
+      'now': _localNowIso(),
+    });
+    return Stats.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// The keepsake: everything ever logged for this baby, counted and told back.

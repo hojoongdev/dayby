@@ -212,6 +212,46 @@ class Wrapped(BaseModel):
     lang: str = "en"
 
 
+class DayStat(BaseModel):
+    """One day, as the caregiver lived it — their midnight, not UTC's."""
+
+    date: str
+    feeds: int = 0
+    feed_ml: float = 0
+    # What actually changes as a baby grows is not how much they take but how long they
+    # go between takes.
+    avg_feed_gap_min: Optional[int] = None
+    diapers: dict[str, int] = Field(default_factory=dict)
+    nap_min: int = 0
+    night_sleep_min: int = 0
+
+
+class GrowthPoint(BaseModel):
+    time: datetime
+    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = None
+
+
+class RhythmBlock(BaseModel):
+    """One block on the 24-hour view: a day, a kind, and where it falls on the clock.
+
+    A sleep is a long block; a feed or a nappy is a mark. Laid one day above another, the
+    shape of a baby's day is the thing a parent can actually see changing.
+    """
+
+    date: str
+    type: str
+    # Minutes past the caregiver's own midnight, so the blocks line up under each other.
+    start_min: int
+    minutes: int = 0
+
+
+class Stats(BaseModel):
+    days: list[DayStat] = Field(default_factory=list)
+    growth: list[GrowthPoint] = Field(default_factory=list)
+    rhythm: list[RhythmBlock] = Field(default_factory=list)
+
+
 class EventCreate(BaseModel):
     """A confirmed event to persist (after the user reviews the ingest result)."""
 

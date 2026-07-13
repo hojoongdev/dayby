@@ -5,6 +5,7 @@ import '../providers.dart';
 import 'dashboard_screen.dart';
 import 'log_screen.dart';
 import 'settings_screen.dart';
+import 'stats_screen.dart';
 import 'timeline_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -20,6 +21,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const _tabs = [
     DashboardScreen(),
     LogScreen(),
+    StatsScreen(),
     TimelineScreen(),
     SettingsScreen(),
   ];
@@ -34,6 +36,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (event == null) return;
       ref.invalidate(eventsProvider(event.babyId));
       ref.invalidate(tipsProvider(event.babyId));
+      ref.invalidate(statsProvider(event.babyId));
     });
 
     // Every time the assistant recalculates -- on launch, on a save, on the other
@@ -63,6 +66,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: Icon(Icons.mic_none_outlined),
             selectedIcon: Icon(Icons.mic),
             label: 'Log',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Stats',
           ),
           NavigationDestination(
             icon: Icon(Icons.list_alt_outlined),
