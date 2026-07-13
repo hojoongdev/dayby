@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = 30
     refresh_token_ttl_days: int = 60
 
+    # How long a family invite code stays good. Long enough to text a partner and have
+    # them join later; short enough that a leaked code does not open the family forever.
+    invite_ttl_hours: int = 168  # 7 days
+
     # App
     app_env: str = "development"
 

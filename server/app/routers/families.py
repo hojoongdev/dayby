@@ -1,4 +1,5 @@
 """Family and baby management. All baby routes are scoped to the caller's family."""
+from datetime import timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -15,9 +16,18 @@ from ..models.family import (
     FamilyJoin,
     FamilyOut,
 )
-from ..util import invite_code, new_id, now
+from ..util import as_utc, invite_code, new_id, now
 
 router = APIRouter(tags=["families"])
+
+
+def _fresh_invite() -> dict:
+    """A new code and the moment it stops working. Creating a family and rotating its
+    code both need exactly this."""
+    return {
+        "invite_code": invite_code(),
+        "invite_expires_at": now() + timedelta(hours=settings.invite_ttl_hours),
+    }
 
 
 def _baby_out(doc: dict) -> BabyOut:
@@ -32,7 +42,12 @@ def _baby_out(doc: dict) -> BabyOut:
 
 
 def _family_out(doc: dict) -> FamilyOut:
-    return FamilyOut(id=doc["_id"], name=doc["name"], invite_code=doc["invite_code"])
+    return FamilyOut(
+        id=doc["_id"],
+        name=doc["name"],
+        invite_code=doc["invite_code"],
+        invite_expires_at=doc.get("invite_expires_at"),
+    )
 
 
 @router.post("/families", response_model=FamilyOut, status_code=201)
@@ -53,9 +68,9 @@ async def create_family(
     doc = {
         "_id": new_id(),
         "name": body.name,
-        "invite_code": invite_code(),
         "members": members,
         "created_at": now(),
+        **_fresh_invite(),
     }
     await get_db().families.insert_one(doc)
     return _family_out(doc)
@@ -71,10 +86,25 @@ async def join_family(
     if family is None:
         raise HTTPException(status_code=404, detail="No family with that invite code")
 
+    expires = family.get("invite_expires_at")
+    if expires is not None and as_utc(expires) < now():
+        raise HTTPException(
+            status_code=410, detail="This invite code has expired. Ask for a new one."
+        )
+
     await get_db().families.update_one(
         {"_id": family["_id"]}, {"$addToSet": {"members": user["_id"]}}
     )
     return _family_out(family)
+
+
+@router.post("/families/invite/rotate", response_model=FamilyOut)
+async def rotate_invite(family: dict = Depends(get_current_family)) -> FamilyOut:
+    """Replace the invite code with a new one, so a code that got out stops working. Any
+    member can do it; the old code is dead the moment this returns."""
+    invite = _fresh_invite()
+    await get_db().families.update_one({"_id": family["_id"]}, {"$set": invite})
+    return _family_out({**family, **invite})
 
 
 @router.get("/families/members", response_model=list[UserOut])
