@@ -81,6 +81,8 @@ Future<_FakeApiClient> _openChat(WidgetTester tester, StructuredResult result,
   await tester.tap(find.byIcon(Icons.mic_none_outlined));
   await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextField), saying);
+  // The send button only exists once there is something typed to send.
+  await tester.pump();
   await tester.tap(find.byIcon(Icons.send));
   await tester.pumpAndSettle();
 

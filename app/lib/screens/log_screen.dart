@@ -63,13 +63,17 @@ class LogScreen extends ConsumerStatefulWidget {
 class _LogScreenState extends ConsumerState<LogScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
-  final VoiceRecorder _voice = VoiceRecorder();
+  late final VoiceRecorder _voice = ref.read(voiceRecorderProvider);
   final Tts _tts = Tts();
   StreamSubscription<double>? _levels;
   bool _voiceAvailable = false;
   bool _listening = false;
+  /// Between the tap and the mic actually being open. Neither listening nor idle.
+  bool _opening = false;
   double _level = 0;
   bool _muted = false;
+  /// Whether there is anything typed. The send button only exists while there is.
+  bool _typing = false;
 
   final List<_Msg> _history = [];
   StructuredResult? _pending;
@@ -82,12 +86,17 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   void initState() {
     super.initState();
     _initVoice();
+    _input.addListener(() {
+      final typing = _input.text.trim().isNotEmpty;
+      if (typing != _typing) setState(() => _typing = typing);
+    });
   }
 
   @override
   void dispose() {
+    // The recorder belongs to the provider, which closes it. Only the listening on it
+    // is ours to let go of.
     _levels?.cancel();
-    _voice.dispose();
     _tts.stop();
     _input.dispose();
     _scroll.dispose();
@@ -123,20 +132,27 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       await _finishVoice();
       return;
     }
-    if (!await _voice.hasPermission()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dayby needs the microphone to hear you.')),
-      );
-      return;
-    }
+    // Asking for the microphone and opening it are both slow, and _listening does not
+    // become true until they are done. Without this, a second tap in that gap starts a
+    // whole second recording on top of the first.
+    if (_opening) return;
+    _opening = true;
     try {
+      if (!await _voice.hasPermission()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dayby needs the microphone to hear you.')),
+        );
+        return;
+      }
       await _voice.start(onEnd: _finishVoice);
       if (mounted) setState(() => _listening = true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      _opening = false;
     }
   }
 
@@ -786,6 +802,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   Widget _composeBar(Baby? active) {
     final canType = active != null;
+    // A photo on its own is a log, so having attached one is already something to send.
+    final sending = _typing || _photo != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
       child: Column(
@@ -798,7 +816,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Row(
               children: [
-                _mic(canType),
                 IconButton(
                   onPressed: canType ? _attachSheet : null,
                   tooltip: 'Attach a photo',
@@ -817,10 +834,17 @@ class _LogScreenState extends ConsumerState<LogScreen> {
                     ),
                   ),
                 ),
-                IconButton(
-                  onPressed: (_thinking || !canType) ? null : _submit,
-                  icon: const Icon(Icons.send),
-                ),
+                // The mic sits where a thumb actually lands, because the other arm is
+                // holding the baby. It stands aside for send only once there is typing
+                // to send — and typing is not what this app is for.
+                if (sending)
+                  IconButton(
+                    onPressed: (_thinking || !canType) ? null : _submit,
+                    tooltip: 'Send',
+                    icon: const Icon(Icons.send),
+                  )
+                else
+                  _mic(canType),
               ],
             ),
           ),
@@ -829,37 +853,47 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     );
   }
 
+  /// Filled and full-size, because it is the one control this app is really for, and it
+  /// is pressed by a thumb on a phone the same hand is holding.
+  ///
   /// The words no longer appear as they are spoken — the server does the listening now —
-  /// so the button has to show that the mic is alive. It swells with your voice.
+  /// so while it listens the button swells with your voice. Otherwise there would be no
+  /// way to tell a mic that is hearing you from one that is dead.
   Widget _mic(bool canType) {
-    final theme = Theme.of(context);
-    if (!_listening) {
-      return IconButton(
-        onPressed: _voiceAvailable && canType ? _toggleMic : null,
-        tooltip: 'Speak',
-        color: theme.colorScheme.primary,
-        icon: const Icon(Icons.mic),
-      );
-    }
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: 24 + _level * 22,
-          height: 24 + _level * 22,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: theme.colorScheme.error.withValues(alpha: 0.25),
+    final scheme = Theme.of(context).colorScheme;
+    final listening = _listening;
+    return SizedBox(
+      height: 48,
+      width: 48,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (listening)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 44 + _level * 14,
+              height: 44 + _level * 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.error.withValues(alpha: 0.22),
+              ),
+            ),
+          SizedBox(
+            height: 44,
+            width: 44,
+            child: FilledButton(
+              onPressed: _voiceAvailable && canType ? _toggleMic : null,
+              style: FilledButton.styleFrom(
+                shape: const CircleBorder(),
+                padding: EdgeInsets.zero,
+                backgroundColor: listening ? scheme.error : scheme.primary,
+                foregroundColor: listening ? scheme.onError : scheme.onPrimary,
+              ),
+              child: Icon(listening ? Icons.stop_rounded : Icons.mic, size: 22),
+            ),
           ),
-        ),
-        IconButton(
-          onPressed: _toggleMic,
-          tooltip: 'Stop',
-          color: theme.colorScheme.error,
-          icon: const Icon(Icons.stop_circle),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

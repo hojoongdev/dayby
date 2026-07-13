@@ -55,6 +55,43 @@ class _FakeApiClient extends ApiClient {
 }
 
 void main() {
+  testWidgets('the mic keeps the thumb corner until there is something to send',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'family_id': 'fam1'});
+    final prefs = await SharedPreferences.getInstance();
+    final fake = _FakeApiClient(
+      const [Baby(id: 'baby1', familyId: 'fam1', name: 'Ari')],
+      const StructuredResult(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPrefsProvider.overrideWithValue(prefs),
+          apiClientProvider.overrideWithValue(fake),
+        ],
+        child: const DaybyApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log'));
+    await tester.pumpAndSettle();
+
+    // The corner a thumb reaches belongs to the mic: this app is for talking to, and the
+    // other arm is holding a baby. (By icon alone the nav bar's Log tab matches too, so
+    // this looks for the button.)
+    final mic = find.widgetWithIcon(FilledButton, Icons.mic);
+    expect(mic, findsOneWidget);
+    expect(find.byIcon(Icons.send), findsNothing);
+
+    // Typing is the only thing that takes it away.
+    await tester.enterText(find.byType(TextField).first, 'fed 120 ml');
+    await tester.pump();
+
+    expect(find.byIcon(Icons.send), findsOneWidget);
+    expect(mic, findsNothing);
+  });
+
   testWidgets('logging: sentence -> confirm card -> save', (tester) async {
     SharedPreferences.setMockInitialValues({'family_id': 'fam1'});
     final prefs = await SharedPreferences.getInstance();
@@ -88,6 +125,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'fed 120 ml');
+    // The send button only exists once there is something typed to send.
+    await tester.pump();
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
 

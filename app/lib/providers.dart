@@ -15,6 +15,7 @@ import 'models/tip.dart';
 import 'models/wrapped.dart';
 import 'reminders.dart';
 import 'units.dart';
+import 'voice.dart';
 
 const familyIdKey = 'family_id';
 const familyNameKey = 'family_name';
@@ -181,6 +182,14 @@ final eventsProvider = FutureProvider.family<List<Event>, String>(
 /// The camera / library picker. Behind a provider so a test can hand the screen a
 /// picture without opening a platform dialog.
 final imagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
+
+/// The microphone. Behind a provider for the same reason: a test can talk to the app
+/// without one, which is the only way to cover what a second impatient tap does.
+final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
+  final recorder = VoiceRecorder();
+  ref.onDispose(recorder.dispose);
+  return recorder;
+});
 
 final liveFeedProvider = Provider<LiveFeed>((ref) => const WebSocketLiveFeed());
 

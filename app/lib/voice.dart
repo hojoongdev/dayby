@@ -100,6 +100,11 @@ class VoiceRecorder {
   /// Starts listening. [onEnd] fires once, when they stop talking or when they have been
   /// talking for [maxLength]. The caller then calls [stop] for the recording.
   Future<void> start({required VoidCallback onEnd}) async {
+    // Nothing from a previous session may outlive this one. Starting twice used to leave
+    // the old amplitude listener running (every sample arrived twice) and, worse, the old
+    // backstop armed — a 30-second timer belonging to a recording that ended long ago,
+    // waiting to cut this one off mid-sentence.
+    await _disarm();
     _silence = SilenceDetector();
     _finished = false;
 
