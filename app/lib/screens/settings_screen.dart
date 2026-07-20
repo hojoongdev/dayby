@@ -101,6 +101,12 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: _units(ref),
             screen: const UnitsScreen(),
           ),
+          _MenuRow(
+            icon: Icons.brightness_6_outlined,
+            title: 'Appearance',
+            subtitle: _appearance(ref),
+            screen: const AppearanceScreen(),
+          ),
           // Offered only where there is a sensor to ask.
           if (ref.watch(biometricsAvailableProvider).value ?? false) ...[
             const _SectionHeader('Privacy'),
@@ -295,6 +301,12 @@ class _MenuRow extends StatelessWidget {
 
 String _spoken(WidgetRef ref) =>
     ref.watch(spokenLanguagesProvider).map(languageName).join(', ');
+
+String _appearance(WidgetRef ref) => switch (ref.watch(themeModeProvider)) {
+      ThemeMode.system => 'Follows the phone',
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+    };
 
 String _units(WidgetRef ref) {
   final u = ref.watch(unitPrefsProvider);

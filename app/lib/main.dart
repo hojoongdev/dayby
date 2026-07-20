@@ -29,14 +29,23 @@ class DaybyApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Dayby',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6C8EBF)),
-        useMaterial3: true,
-      ),
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: ref.watch(themeModeProvider),
       home: const _Entry(),
     );
   }
 }
+
+/// The gradient, the glass and the charts each carry their own dark values already.
+/// This is only the Material half: the colours everything else is drawn from.
+ThemeData _theme(Brightness brightness) => ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF6C8EBF),
+        brightness: brightness,
+      ),
+      useMaterial3: true,
+    );
 
 /// Four questions, in order: is the phone allowed to show this at all, does this
 /// server want a sign-in, are we signed in, and do we have a family yet.

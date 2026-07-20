@@ -94,6 +94,28 @@ class LanguagesScreen extends ConsumerWidget {
   }
 }
 
+class AppearanceScreen extends ConsumerWidget {
+  const AppearanceScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _Sheet(
+      title: 'Appearance',
+      caption: 'Follow the phone, or pick one yourself. A lot of Dayby gets read in a '
+          'dark room with a baby on your arm.',
+      children: [
+        _Choice(
+          label: 'Theme',
+          value: ref.watch(themeModeProvider).name,
+          options: const {'system': 'System', 'light': 'Light', 'dark': 'Dark'},
+          onChanged: (v) =>
+              ref.read(themeModeProvider.notifier).set(ThemeMode.values.byName(v)),
+        ),
+      ],
+    );
+  }
+}
+
 class _Sheet extends StatelessWidget {
   const _Sheet({
     required this.title,

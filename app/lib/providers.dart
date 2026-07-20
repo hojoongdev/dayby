@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +28,7 @@ const selectedBabyIdKey = 'selected_baby_id';
 const assistantLangKey = 'assistant_lang';
 const spokenLanguagesKey = 'spoken_languages';
 const appLockKey = 'app_lock';
+const themeModeKey = 'theme_mode';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('overridden in main'),
@@ -355,6 +357,26 @@ class AssistantLangNotifier extends Notifier<String> {
 
 final assistantLangProvider =
     NotifierProvider<AssistantLangNotifier, String>(AssistantLangNotifier.new);
+
+/// Light, dark, or whatever the phone is set to. Defaults to the phone.
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() {
+    final saved = ref.watch(sharedPrefsProvider).getString(themeModeKey);
+    return ThemeMode.values.firstWhere(
+      (m) => m.name == saved,
+      orElse: () => ThemeMode.system,
+    );
+  }
+
+  Future<void> set(ThemeMode mode) async {
+    await ref.read(sharedPrefsProvider).setString(themeModeKey, mode.name);
+    state = mode;
+  }
+}
+
+final themeModeProvider =
+    NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
 /// The caregiver's preferred display units, persisted.
 class UnitPrefsNotifier extends Notifier<UnitPrefs> {
