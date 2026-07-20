@@ -88,6 +88,24 @@ class ApiClient {
     return Session.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// Password provider: sign in to an existing local account.
+  Future<Session> signInWithPassword(String email, String password) async {
+    final res = await _dio.post(
+      '/auth/signin',
+      data: {'email': email, 'password': password},
+    );
+    return Session.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// Password provider: make a new local account and get a session for it.
+  Future<Session> signUp(String email, String password, {String? name}) async {
+    final res = await _dio.post(
+      '/auth/signup',
+      data: {'email': email, 'password': password, 'name': ?name},
+    );
+    return Session.fromJson(res.data as Map<String, dynamic>);
+  }
+
   Future<Session> refreshSession(String refreshToken) async {
     final res = await _dio.post('/auth/refresh', data: {'refresh_token': refreshToken});
     return Session.fromJson(res.data as Map<String, dynamic>);

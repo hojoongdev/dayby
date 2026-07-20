@@ -95,9 +95,21 @@ class SessionNotifier extends AsyncNotifier<Session?> {
   }
 
   Future<void> signIn(String providerToken) async {
+    await _authenticate(() => _anonymous.signIn(providerToken));
+  }
+
+  Future<void> signInWithPassword(String email, String password) async {
+    await _authenticate(() => _anonymous.signInWithPassword(email, password));
+  }
+
+  Future<void> signUp(String email, String password, {String? name}) async {
+    await _authenticate(() => _anonymous.signUp(email, password, name: name));
+  }
+
+  Future<void> _authenticate(Future<Session> Function() call) async {
     state = const AsyncLoading();
     try {
-      state = AsyncData(await _remember(await _anonymous.signIn(providerToken)));
+      state = AsyncData(await _remember(await call()));
     } catch (error, stack) {
       state = AsyncError(error, stack);
       rethrow; // the sign-in screen says what went wrong; the app stays put

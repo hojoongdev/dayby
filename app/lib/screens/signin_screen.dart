@@ -21,14 +21,19 @@ class SignInScreen extends ConsumerStatefulWidget {
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _email = TextEditingController();
+  final _password = TextEditingController();
   bool _busy = false;
+  // Password provider only: whether the button makes an account or signs in to one.
+  bool _createMode = false;
   String? _error;
 
   bool get _google => widget.provider == 'google';
+  bool get _isPassword => widget.provider == 'password';
 
   @override
   void dispose() {
     _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -47,6 +52,33 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return;
       }
       await ref.read(sessionProvider.notifier).signIn(providerToken);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = friendlyError(e);
+      });
+    }
+  }
+
+  /// Password provider: make an account or sign in to one, depending on the mode.
+  Future<void> _submitPassword() async {
+    if (_busy) return;
+    final email = _email.text.trim();
+    final password = _password.text;
+    if (email.isEmpty || password.isEmpty) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final session = ref.read(sessionProvider.notifier);
+      if (_createMode) {
+        await session.signUp(email, password);
+      } else {
+        await session.signInWithPassword(email, password);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -77,12 +109,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       Text('Dayby', style: theme.textTheme.headlineMedium),
                       const SizedBox(height: 4),
                       Text(
-                        'Sign in to keep your logs across devices.',
+                        _createMode
+                            ? 'Create an account to keep your logs across devices.'
+                            : 'Sign in to keep your logs across devices.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 24),
-                      if (_google) ..._googleSection(theme) else ..._emailSection(theme),
+                      if (_google)
+                        ..._googleSection(theme)
+                      else if (_isPassword)
+                        ..._passwordSection(theme)
+                      else
+                        ..._emailSection(theme),
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
@@ -120,6 +159,56 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           icon: _busy ? _spinner() : const Icon(Icons.g_mobiledata, size: 28),
           label: const Text('Continue with Google'),
         ),
+      ),
+    ];
+  }
+
+  List<Widget> _passwordSection(ThemeData theme) {
+    return [
+      TextField(
+        controller: _email,
+        enabled: !_busy,
+        keyboardType: TextInputType.emailAddress,
+        autofillHints: const [AutofillHints.email],
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Email',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 16),
+      TextField(
+        controller: _password,
+        enabled: !_busy,
+        obscureText: true,
+        autofillHints: const [AutofillHints.password],
+        onSubmitted: (_) => _submitPassword(),
+        decoration: InputDecoration(
+          labelText: 'Password',
+          helperText: _createMode ? 'At least 8 characters' : null,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 20),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: _busy ? null : _submitPassword,
+          child: _busy
+              ? _spinner()
+              : Text(_createMode ? 'Create account' : 'Sign in'),
+        ),
+      ),
+      TextButton(
+        onPressed: _busy
+            ? null
+            : () => setState(() {
+                  _createMode = !_createMode;
+                  _error = null;
+                }),
+        child: Text(_createMode
+            ? 'Already have an account? Sign in'
+            : "New here? Create an account"),
       ),
     ];
   }
