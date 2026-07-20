@@ -82,7 +82,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ref.listen(tipsProvider(baby.id), (_, next) {
         final tips = next.value;
         if (tips == null) return;
-        ref.read(remindersProvider).schedule(at: tips.remindAt, text: tips.reminder);
+        ref.read(remindersProvider).scheduleAll(
+              [for (final s in tips.scheduled) (at: s.at, text: s.text)],
+            );
       });
     }
 

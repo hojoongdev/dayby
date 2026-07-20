@@ -15,6 +15,7 @@ from .routers import (
     ingest,
     live,
     photos,
+    routines,
     stats,
     wrapped,
 )
@@ -65,6 +66,7 @@ app.include_router(photos.router)
 app.include_router(stats.router)
 app.include_router(wrapped.router)
 app.include_router(live.router)
+app.include_router(routines.router)
 
 
 @app.get("/")

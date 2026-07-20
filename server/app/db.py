@@ -60,6 +60,7 @@ async def ensure_indexes() -> None:
     await db.events.create_index([("family_id", 1), ("baby_id", 1), ("time", -1)])
     await _keep_deleted_events_briefly(db)
     await db.babies.create_index([("family_id", 1)])
+    await db.routines.create_index([("family_id", 1)])
     await db[f"{PHOTO_BUCKET}.files"].create_index([("metadata.family_id", 1)])
     # Identity: one account per person per provider, and "which family am I in?"
     # is asked on every authenticated request.

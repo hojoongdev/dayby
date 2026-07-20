@@ -13,9 +13,14 @@ from ..care import OVERDUE_AFTER
 from ..context import build_llm_context
 from ..db import get_db
 from ..deps import get_current_family, require_baby
-from ..models.events import AssistantTips, CareSignal, UpcomingEvent
+from ..models.events import (
+    AssistantTips,
+    CareSignal,
+    ScheduledReminder,
+    UpcomingEvent,
+)
 from ..providers import get_llm_provider
-from ..util import now
+from ..util import as_utc, now
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
@@ -24,6 +29,51 @@ UPCOMING_WINDOW = timedelta(days=7)
 
 # Do not wake anyone for something a few minutes away; they are still holding the baby.
 REMINDER_FLOOR = timedelta(minutes=20)
+
+# A rule cannot schedule the whole month; keep the phone's queue short.
+MAX_SCHEDULED = 10
+
+
+async def routine_reminders(
+    family: dict, baby_id: str, signals: list[CareSignal], now_dt: datetime
+) -> list[ScheduledReminder]:
+    """The family's own rules, turned into the next moment each one fires.
+
+    An after-event rule fires from the last event of its type; a daily rule fires at
+    its next occurrence on the caregiver's clock. now_dt carries their offset, so a
+    daily time is read on their clock, not UTC's.
+    """
+    last_seen = {s.type: s.last_time for s in signals if s.last_time}
+    cursor = get_db().routines.find({
+        "family_id": family["_id"],
+        "active": True,
+        "$or": [{"baby_id": baby_id}, {"baby_id": None}],
+    })
+
+    out: list[ScheduledReminder] = []
+    async for rule in cursor:
+        text = rule.get("message", "").strip()
+        if not text:
+            continue
+
+        if rule["kind"] == "after_event":
+            last = last_seen.get(rule.get("trigger_type"))
+            if last is None:
+                continue  # nothing of that kind has happened yet to fire after
+            fires_at = as_utc(last) + timedelta(minutes=rule.get("delay_min") or 0)
+            if fires_at > now_dt:
+                out.append(ScheduledReminder(at=fires_at, text=text))
+
+        elif rule["kind"] == "daily":
+            hours, _, minutes = rule.get("time_local", "").partition(":")
+            fires_at = now_dt.replace(
+                hour=int(hours), minute=int(minutes), second=0, microsecond=0
+            )
+            if fires_at <= now_dt:
+                fires_at += timedelta(days=1)
+            out.append(ScheduledReminder(at=fires_at, text=text))
+
+    return out
 
 
 def next_reminder(
@@ -136,11 +186,20 @@ async def tips(
     )
     reminder = next((t.text for t in written if t.kind == "reminder"), None)
 
+    # The overdue-gap nudge and the family's own rules go to the phone together.
+    scheduled: list[ScheduledReminder] = []
+    if remind_at and reminder:
+        scheduled.append(ScheduledReminder(at=remind_at, text=reminder))
+    scheduled.extend(await routine_reminders(family, baby_id, signals, now_dt))
+    scheduled.sort(key=lambda r: r.at)
+    scheduled = scheduled[:MAX_SCHEDULED]
+
     return AssistantTips(
         tips=[t for t in written if t.kind != "reminder"],
         signals=signals,
         upcoming=upcoming,
-        remind_at=remind_at if reminder else None,
-        reminder=reminder,
+        scheduled=scheduled,
+        remind_at=scheduled[0].at if scheduled else None,
+        reminder=scheduled[0].text if scheduled else None,
         lang=lang or "en",
     )

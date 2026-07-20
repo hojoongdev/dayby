@@ -154,14 +154,27 @@ class Tip(BaseModel):
     text: str
 
 
+class ScheduledReminder(BaseModel):
+    """One nudge to hand the phone, to arrive at a set moment with Dayby closed.
+
+    Either the overdue-gap nudge the assistant writes, or a rule the family set for
+    itself ("after a feeding, give vitamin D in 30 minutes").
+    """
+
+    at: datetime
+    text: str
+
+
 class AssistantTips(BaseModel):
     tips: list[Tip] = Field(default_factory=list)
     signals: list[CareSignal] = Field(default_factory=list)
     upcoming: list[UpcomingEvent] = Field(default_factory=list)
 
-    # When the next gap opens up, and what to say then. The app hands both to the
-    # operating system, which delivers it whether or not Dayby is running -- the
-    # whole point of a nudge is that it arrives when you have forgotten to look.
+    # Everything to hand the operating system, so it arrives whether or not Dayby is
+    # running -- the overdue-gap nudge plus whatever rules the family has set.
+    scheduled: list[ScheduledReminder] = Field(default_factory=list)
+
+    # The soonest of the above, kept for the app that still reads a single one.
     remind_at: Optional[datetime] = None
     reminder: Optional[str] = None
 
