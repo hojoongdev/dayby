@@ -16,8 +16,20 @@ class AuthIdentity(BaseModel):
 
 
 class SignInRequest(BaseModel):
-    # The provider's ID token. For the mock provider: whatever email you claim.
-    token: str
+    # Token providers (mock, google): the provider's ID token. For the mock provider,
+    # whatever email you claim.
+    token: Optional[str] = None
+    # Password provider: the account's own credentials instead of an external token.
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
+class SignUpRequest(BaseModel):
+    """A new local account (AUTH_PROVIDER=password)."""
+
+    email: str
+    password: str
+    name: Optional[str] = None
 
 
 class RefreshRequest(BaseModel):

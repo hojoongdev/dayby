@@ -111,7 +111,87 @@ def test_a_refresh_token_is_not_an_access_token(clean_db, auth_on):
         assert c.get("/auth/me", headers=_bearer(renewed.json())).status_code == 200
 
 
-def test_the_app_is_told_whether_to_ask_for_a_sign_in(clean_db):
+@pytest.fixture
+def password_auth(monkeypatch):
+    monkeypatch.setattr(settings, "auth_provider", "password")
+    yield
+
+
+def _signup(c: TestClient, email: str, password: str = "correcthorse") -> dict:
+    res = c.post("/auth/signup", json={"email": email, "password": password})
+    assert res.status_code == 201, res.text
+    return res.json()
+
+
+def test_signup_then_signin_is_the_same_account(clean_db, password_auth):
+    with TestClient(app) as c:
+        created = _signup(c, "mum@dayby.app")
+        back = c.post("/auth/signin", json={"email": "MUM@dayby.app", "password": "correcthorse"})
+
+        assert back.status_code == 200, back.text
+        assert back.json()["user"]["id"] == created["user"]["id"]
+        assert created["family_id"] is None
+
+
+def test_the_wrong_password_is_refused(clean_db, password_auth):
+    with TestClient(app) as c:
+        _signup(c, "mum@dayby.app")
+        res = c.post("/auth/signin", json={"email": "mum@dayby.app", "password": "wrong"})
+        assert res.status_code == 401
+
+
+def test_an_unknown_email_and_a_wrong_password_look_the_same(clean_db, password_auth):
+    with TestClient(app) as c:
+        _signup(c, "mum@dayby.app")
+        missing = c.post("/auth/signin", json={"email": "nobody@dayby.app", "password": "x"})
+        wrong = c.post("/auth/signin", json={"email": "mum@dayby.app", "password": "x"})
+        assert missing.status_code == wrong.status_code == 401
+        assert missing.json()["detail"] == wrong.json()["detail"]
+
+
+def test_you_cannot_take_an_email_twice(clean_db, password_auth):
+    with TestClient(app) as c:
+        _signup(c, "mum@dayby.app")
+        again = c.post("/auth/signup", json={"email": "mum@dayby.app", "password": "correcthorse"})
+        assert again.status_code == 409
+
+
+def test_a_short_password_is_refused(clean_db, password_auth):
+    with TestClient(app) as c:
+        res = c.post("/auth/signup", json={"email": "mum@dayby.app", "password": "short"})
+        assert res.status_code == 422
+
+
+def test_a_second_account_makes_one_and_joins_by_invite(clean_db, password_auth):
+    """The flow the app walks: create an account, then join the family with its code."""
+    with TestClient(app) as c:
+        mum = _signup(c, "mum@dayby.app")
+        family = c.post("/families", headers=_bearer(mum), json={"name": "Kim"}).json()
+        c.post("/babies", headers=_bearer(mum), json={"name": "Haein"})
+
+        dad = _signup(c, "dad@dayby.app")
+        joined = c.post(
+            "/families/join",
+            headers=_bearer(dad),
+            json={"invite_code": family["invite_code"]},
+        )
+        assert joined.status_code == 200
+        assert [b["name"] for b in c.get("/babies", headers=_bearer(dad)).json()] == ["Haein"]
+
+        # And signing back in now lands the second parent on the shared family.
+        assert c.post(
+            "/auth/signin", json={"email": "dad@dayby.app", "password": "correcthorse"}
+        ).json()["family_id"] == family["id"]
+
+
+def test_signup_is_off_unless_the_provider_is_password(clean_db, auth_on):
+    with TestClient(app) as c:
+        res = c.post("/auth/signup", json={"email": "mum@dayby.app", "password": "correcthorse"})
+        assert res.status_code == 404
+
+
+def test_the_app_is_told_whether_to_ask_for_a_sign_in(clean_db, monkeypatch):
+    monkeypatch.setattr(settings, "auth_provider", "none")
     with TestClient(app) as c:
         off = c.get("/auth/config").json()
         assert off == {"enabled": False, "provider": "none"}
