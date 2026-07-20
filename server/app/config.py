@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Vertex AI Express mode: use a Vertex AI api key instead of an AI Studio key
     # (no GCP project / service account needed).
     google_genai_use_vertexai: bool = False
+    # How long to wait on one Gemini call. The slowest real one is a grounded answer over
+    # a busy week, at around twenty seconds. With no limit, a dropped connection is
+    # retried out of sight for minutes and the caller holds a request that never returns.
+    gemini_timeout_ms: int = 45_000
 
     # Auth. "none" = no identity provider; the caller names its family with the
     # X-Family-Id header, which is only allowed in development. "mock" runs the whole

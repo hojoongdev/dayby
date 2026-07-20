@@ -42,11 +42,16 @@ class GeminiLLMProvider(LLMProvider):
     def __init__(self) -> None:
         if not settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is not set (required for LLM_PROVIDER=gemini)")
+        http = types.HttpOptions(timeout=settings.gemini_timeout_ms)
         if settings.google_genai_use_vertexai:
             # Vertex AI Express mode: api key + vertexai=True, no GCP project needed.
-            self._client = genai.Client(vertexai=True, api_key=settings.gemini_api_key)
+            self._client = genai.Client(
+                vertexai=True, api_key=settings.gemini_api_key, http_options=http
+            )
         else:
-            self._client = genai.Client(api_key=settings.gemini_api_key)
+            self._client = genai.Client(
+                api_key=settings.gemini_api_key, http_options=http
+            )
         self._model = settings.gemini_model
 
     async def structure_log(self, text: str, ctx: LlmContext) -> StructuredResult:
