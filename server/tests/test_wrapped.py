@@ -61,7 +61,7 @@ def test_it_finds_the_busiest_day_in_the_callers_timezone(clean_db):
     with TestClient(app) as c:
         fid, bid = _family_and_baby(c)
 
-        for hour in (8, 11, 14, 17):
+        for hour in (6, 8, 11, 14):
             _log(c, fid, bid, "feeding", NOW.replace(hour=hour))
         _log(c, fid, bid, "feeding", (NOW - timedelta(days=1)).replace(hour=9))
 
@@ -90,6 +90,20 @@ def test_it_tallies_growth_and_spending(clean_db):
         assert stats["last_height_cm"] == 66
         assert stats["spend"] == [{"currency": "KRW", "total": 75000, "count": 2}]
         assert len(stats["milestones"]) == 1
+
+
+def test_something_still_ahead_is_not_counted(clean_db):
+    with TestClient(app) as c:
+        fid, bid = _family_and_baby(c)
+
+        _log(c, fid, bid, "feeding", NOW - timedelta(days=1), amount_ml=120)
+        _log(c, fid, bid, "appointment", NOW + timedelta(days=5))
+
+        stats = _wrapped(c, fid, bid)
+
+        assert stats["total_events"] == 1
+        assert stats["days_tracked"] == 1
+        assert "appointment" not in stats["top_types"]
 
 
 def test_an_empty_history_is_all_zeroes_not_a_crash(clean_db):

@@ -22,9 +22,12 @@ router = APIRouter(prefix="/wrapped", tags=["wrapped"])
 NIGHT_ENDS_AT = 5
 
 
-def _pipeline(family_id: str, baby_id: str, tz: str) -> list[dict[str, Any]]:
+def _pipeline(family_id: str, baby_id: str, tz: str, until: datetime) -> list[dict[str, Any]]:
     return [
-        {"$match": {"family_id": family_id, "baby_id": baby_id}},
+        # Only what has already happened. An appointment booked for next week is a real
+        # event with a real date, and left in it would stretch the story past today and
+        # count a vaccination nobody has had yet.
+        {"$match": {"family_id": family_id, "baby_id": baby_id, "time": {"$lte": until}}},
         {"$facet": {
             "totals": [{"$group": {
                 "_id": None,
@@ -104,7 +107,7 @@ def _one(rows: list[dict], key: str, default: Any = None) -> Any:
 
 async def collect(family_id: str, baby_id: str, now_dt: datetime) -> WrappedStats:
     cursor = await get_db().events.aggregate(
-        _pipeline(family_id, baby_id, tz_offset(now_dt))
+        _pipeline(family_id, baby_id, tz_offset(now_dt), now_dt)
     )
     facets = (await cursor.to_list(length=1))[0]
 
