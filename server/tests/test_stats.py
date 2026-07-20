@@ -93,6 +93,26 @@ def test_a_nap_and_a_night_are_not_the_same_thing(clean_db):
         assert days["2026-07-12"]["nap_min"] == 0
 
 
+def test_a_night_split_by_a_feed_belongs_to_one_day(clean_db):
+    """Waking at 1am does not start a second night. Filed under the day each stretch
+    begins on, a Tuesday would carry the tail of Monday's night as well as its own."""
+    now = datetime(2026, 7, 13, 20, 0, tzinfo=KST)
+    with TestClient(app) as c:
+        fid, bid = _family_and_baby(c)
+
+        # Down at 8pm on the 12th, awake at 1am to be fed.
+        _log(c, fid, bid, datetime(2026, 7, 13, 1, 0, tzinfo=KST),
+             type="sleep", subtype="end", fields={"duration_min": 300})
+        # Back down at 1:30am, up for the day at 6:30. Same night, other side of midnight.
+        _log(c, fid, bid, datetime(2026, 7, 13, 6, 30, tzinfo=KST),
+             type="sleep", subtype="end", fields={"duration_min": 300})
+
+        days = {d["date"]: d for d in _stats(c, fid, bid, now)["days"]}
+
+        assert days["2026-07-12"]["night_sleep_min"] == 600
+        assert "2026-07-13" not in days
+
+
 def test_a_sleep_across_midnight_is_cut_in_two_for_the_rhythm_view(clean_db):
     """One row per day on the 24-hour chart. A sleep from 11pm to 6am cannot be one block
     or it would run off the end of the row it started on."""

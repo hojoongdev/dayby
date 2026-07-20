@@ -127,6 +127,20 @@ def _is_night(hour: int) -> bool:
     return hour >= NIGHT_STARTS_AT or hour < NIGHT_ENDS_AT
 
 
+def _shift(day: str, days: int) -> str:
+    return (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+def _night_of(day: str, start_hour: int) -> str:
+    """Which day a sleep counts towards.
+
+    A stretch that starts after midnight belongs to the night before it. Counted on the
+    day it begins, a Tuesday holds the tail of Monday's night as well as all of its own,
+    and reports fifteen hours. Naps never start before NIGHT_ENDS_AT, so they never move.
+    """
+    return _shift(day, -1) if start_hour < NIGHT_ENDS_AT else day
+
+
 def _average_gap(times: list[datetime]) -> int | None:
     """How long, on average, this baby went between feeds today."""
     if len(times) < 2:
@@ -152,7 +166,7 @@ def _rhythm(sleeps: list[dict], marks: list[dict]) -> list[RhythmBlock]:
             )
             left -= tonight
             start = 0
-            day = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            day = _shift(day, 1)
 
     blocks.extend(
         RhythmBlock(date=mark["day"], type=mark["type"], start_min=mark["start_min"])
@@ -193,8 +207,9 @@ async def stats(
         day.diapers[diaper["_id"]["kind"]] = diaper["count"]
 
     for sleep in facets["sleeps"]:
-        day = by_day[sleep["day"]]
-        day.date = sleep["day"]
+        date = _night_of(sleep["day"], sleep["start_hour"])
+        day = by_day[date]
+        day.date = date
         if _is_night(sleep["start_hour"]):
             day.night_sleep_min += sleep["minutes"]
         else:
