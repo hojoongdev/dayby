@@ -10,6 +10,7 @@ import '../models/family.dart';
 import '../providers.dart';
 import '../widgets/glass.dart';
 import 'preferences_screen.dart';
+import 'reminders_screen.dart';
 import 'wrapped_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -88,6 +89,13 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ],
+          const _SectionHeader('Care'),
+          _MenuRow(
+            icon: Icons.alarm_outlined,
+            title: 'Reminders',
+            subtitle: 'Rules like "after a feeding, give vitamin D"',
+            screen: const RemindersScreen(),
+          ),
           const _SectionHeader('You'),
           _MenuRow(
             icon: Icons.translate_outlined,

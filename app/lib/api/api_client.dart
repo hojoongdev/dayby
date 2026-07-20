@@ -7,6 +7,7 @@ import '../auth.dart';
 import '../config.dart';
 import '../models/event.dart';
 import '../models/family.dart';
+import '../models/routine.dart';
 import '../models/stats.dart';
 import '../models/tip.dart';
 import '../models/wrapped.dart';
@@ -120,6 +121,39 @@ class ApiClient {
     final res = await _dio.post('/families/join', data: {'invite_code': inviteCode});
     return Family.fromJson(res.data as Map<String, dynamic>);
   }
+
+  Future<List<Routine>> listRoutines() async {
+    final res = await _dio.get('/routines');
+    return (res.data as List)
+        .map((r) => Routine.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Routine> createRoutine({
+    required RoutineKind kind,
+    required String message,
+    String? triggerType,
+    int? delayMin,
+    String? timeLocal,
+    String? babyId,
+  }) async {
+    final res = await _dio.post('/routines', data: {
+      'kind': kindToWire(kind),
+      'message': message,
+      'trigger_type': ?triggerType,
+      'delay_min': ?delayMin,
+      'time_local': ?timeLocal,
+      'baby_id': ?babyId,
+    });
+    return Routine.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<Routine> setRoutineActive(String id, bool active) async {
+    final res = await _dio.patch('/routines/$id', data: {'active': active});
+    return Routine.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteRoutine(String id) => _dio.delete('/routines/$id');
 
   Future<Baby> addBaby({
     required String name,

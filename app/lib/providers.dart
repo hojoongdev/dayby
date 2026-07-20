@@ -14,6 +14,7 @@ import 'lang.dart';
 import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
+import 'models/routine.dart';
 import 'models/stats.dart';
 import 'models/tip.dart';
 import 'models/wrapped.dart';
@@ -168,6 +169,11 @@ final familyProvider = Provider<({String name, String code})?>((ref) {
 
 final babiesProvider = FutureProvider<List<Baby>>(
   (ref) => ref.watch(apiClientProvider).listBabies(),
+);
+
+/// The family's reminder rules. Invalidate after adding, toggling or removing one.
+final routinesProvider = FutureProvider<List<Routine>>(
+  (ref) => ref.watch(apiClientProvider).listRoutines(),
 );
 
 /// Everyone in this family, by id. A server that asks nobody to sign in has nobody in
