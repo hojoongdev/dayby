@@ -14,6 +14,7 @@ from ...models.events import (
     Action,
     CareSignal,
     Confidence,
+    DayStat,
     LlmContext,
     Role,
     RoutineSpec,
@@ -175,6 +176,20 @@ class MockLLMProvider(LLMProvider):
         # The story is the one part that has to be written; the app shows the
         # numbers either way, so an empty story is an honest offline answer.
         return ""
+
+    async def write_insights(self, days: list[DayStat], ctx: LlmContext) -> list[str]:
+        # One trend is arithmetic, so the mock can be honest and still say something:
+        # compare the first half of the window to the second. The rest is a real model's.
+        if len(days) < 4:
+            return []
+        half = len(days) // 2
+        early = sum(d.feeds for d in days[:half]) / half
+        late = sum(d.feeds for d in days[half:]) / (len(days) - half)
+        if late <= early - 1:
+            return [f"Feeds are trending down, about {round(late)} a day this week."]
+        if late >= early + 1:
+            return [f"Feeds are trending up, about {round(late)} a day this week."]
+        return []
 
     async def structure_photo(
         self, image: bytes, mime_type: str, text: str, ctx: LlmContext

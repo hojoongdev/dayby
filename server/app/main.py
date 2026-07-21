@@ -13,6 +13,7 @@ from .routers import (
     events,
     families,
     ingest,
+    insights,
     live,
     photos,
     routines,
@@ -67,6 +68,7 @@ app.include_router(stats.router)
 app.include_router(wrapped.router)
 app.include_router(live.router)
 app.include_router(routines.router)
+app.include_router(insights.router)
 
 
 @app.get("/")

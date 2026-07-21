@@ -11,6 +11,7 @@ from ... import lang
 from ...models.events import (
     STANDARD_EVENT_TYPES,
     CareSignal,
+    DayStat,
     LlmContext,
     Turn,
     UpcomingEvent,
@@ -207,6 +208,39 @@ Rules:
 - Speak to the parent, about their baby, by name. This is a memory, not a report.
 - No medical claims, no advice, no diagnosis.
 - Output the text only. No JSON, no markdown, no headings, no bullet points."""
+
+
+def build_insights_instruction(ctx: LlmContext, days: list[DayStat]) -> str:
+    """Read the week's trends off the per-day tally.
+
+    Distinct from the tips prompt: that one is about right now, this is about what has
+    been changing across several days.
+    """
+    profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
+    lang = ctx.lang or "the caregiver's language"
+    numbers = "\n".join(d.model_dump_json(exclude_none=True) for d in days) or "(no days)"
+    return f"""You are a warm baby-care assistant looking back over the last week of a
+baby's logs to point out what is changing.
+
+Baby (name, age, sex): {profiles}
+Per-day tally, the caregiver's own days, oldest first (feeds, ml, average gap between
+feeds in minutes, diapers by kind, nap minutes, night-sleep minutes):
+{numbers}
+
+Write 0 to 3 short observations about TRENDS across the week, in this language: {lang}.
+
+Return ONLY JSON: {{"observations": ["<one short sentence>", "..."]}}
+
+Rules:
+- Use ONLY these numbers. Never invent one. If there is no clear trend, or too few days
+  to see one, return fewer lines — an empty list is a fine answer.
+- Observe a trend across days ("night feeds are down to about one"), never recite a single
+  day ("Tuesday had 7 feeds").
+- Each line is read aloud and shown: plain sentences, no markdown, no bullets, no numbers
+  dressed up as tables.
+- Warm and plain, never clinical. Never diagnose or give medical advice; for anything
+  health-related, suggest a pediatrician.
+- Output JSON only. No fences, no commentary."""
 
 
 def build_photo_instruction(ctx: LlmContext) -> str:

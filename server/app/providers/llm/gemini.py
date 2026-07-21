@@ -16,6 +16,7 @@ from ...config import settings
 from ...models.events import (
     CareSignal,
     Confidence,
+    DayStat,
     LlmContext,
     StructuredEvent,
     StructuredResult,
@@ -25,6 +26,7 @@ from ...models.events import (
 )
 from .base import LLMProvider
 from .prompt import (
+    build_insights_instruction,
     build_photo_instruction,
     build_query_instruction,
     build_system_instruction,
@@ -168,6 +170,24 @@ class GeminiLLMProvider(LLMProvider):
             # The numbers are the keepsake; the story is the wrapping paper.
             logger.exception("Gemini write_wrapped failed")
             return ""
+
+    async def write_insights(self, days: list[DayStat], ctx: LlmContext) -> list[str]:
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents="Write the week's observations.",
+                config=types.GenerateContentConfig(
+                    system_instruction=build_insights_instruction(ctx, days),
+                    response_mime_type="application/json",
+                    temperature=0.5,
+                ),
+            )
+            data = json.loads((response.text or "{}").strip())
+            return [str(o).strip() for o in data.get("observations", []) if str(o).strip()][:3]
+        except Exception:
+            # Insights are a bonus surface; the predictions still stand without them.
+            logger.exception("Gemini write_insights failed")
+            return []
 
     async def proactive_tips(
         self,

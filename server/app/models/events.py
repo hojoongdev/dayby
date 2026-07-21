@@ -282,6 +282,25 @@ class Stats(BaseModel):
     rhythm: list[RhythmBlock] = Field(default_factory=list)
 
 
+class Prediction(BaseModel):
+    """When the baby's own rhythm suggests the next one is due. An estimate, not a rule."""
+
+    type: str
+    at: datetime
+    # A short, human reason ("usually about every 3h 10m"), so it is never a black box.
+    basis: str
+
+
+class Insights(BaseModel):
+    """What the assistant sees looking forward and back: the next few things due, and
+    the trends across the week. Distinct from tips, which are about right now."""
+
+    predictions: list[Prediction] = Field(default_factory=list)
+    # The model's read of the week's trends, written from the day tally only.
+    observations: list[str] = Field(default_factory=list)
+    lang: str = "en"
+
+
 class EventCreate(BaseModel):
     """A confirmed event to persist (after the user reviews the ingest result)."""
 

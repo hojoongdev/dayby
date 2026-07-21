@@ -5,6 +5,7 @@ from typing import Optional
 
 from ...models.events import (
     CareSignal,
+    DayStat,
     LlmContext,
     StructuredResult,
     Tip,
@@ -62,6 +63,12 @@ class LLMProvider(ABC):
     @abstractmethod
     async def write_wrapped(self, stats: WrappedStats, ctx: LlmContext) -> str:
         """Tell a whole babyhood back to the parent, from the tally of it."""
+        ...
+
+    @abstractmethod
+    async def write_insights(self, days: list[DayStat], ctx: LlmContext) -> list[str]:
+        """Read the week's trends off the day tally: what is changing, in the caller's
+        language. The numbers are the only facts; the model writes the observation."""
         ...
 
     @abstractmethod

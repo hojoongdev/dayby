@@ -175,22 +175,12 @@ def _rhythm(sleeps: list[dict], marks: list[dict]) -> list[RhythmBlock]:
     return blocks
 
 
-@router.get("", response_model=Stats)
-async def stats(
-    baby_id: str,
-    days: int = Query(14, ge=1, le=180),
-    at: datetime = Query(..., alias="now"),
-    family: dict = Depends(get_current_family),
-) -> Stats:
-    """Everything the charts are drawn from. `now` carries the caller's offset, which is
-    what makes a "day" mean the day they had."""
-    await require_baby(family, baby_id)
-
+async def collect(family_id: str, baby_id: str, days: int, at: datetime) -> Stats:
+    """The chart numbers for one baby. Shared with insights, which reads the same days
+    for trends. `at` carries the caller's offset, which is what makes a "day" theirs."""
     tz = tz_offset(at)
     since = at - timedelta(days=days)
-    cursor = await get_db().events.aggregate(
-        _pipeline(family["_id"], baby_id, since, tz)
-    )
+    cursor = await get_db().events.aggregate(_pipeline(family_id, baby_id, since, tz))
     facets = (await cursor.to_list(length=1))[0]
 
     by_day: dict[str, DayStat] = defaultdict(lambda: DayStat(date=""))
@@ -220,3 +210,16 @@ async def stats(
         growth=[GrowthPoint(**point) for point in facets["growth"]],
         rhythm=_rhythm(facets["sleeps"], facets["marks"]),
     )
+
+
+@router.get("", response_model=Stats)
+async def stats(
+    baby_id: str,
+    days: int = Query(14, ge=1, le=180),
+    at: datetime = Query(..., alias="now"),
+    family: dict = Depends(get_current_family),
+) -> Stats:
+    """Everything the charts are drawn from. `now` carries the caller's offset, which is
+    what makes a "day" mean the day they had."""
+    await require_baby(family, baby_id)
+    return await collect(family["_id"], baby_id, days, at)
