@@ -52,6 +52,20 @@ class StructuredEvent(BaseModel):
     confidence: Confidence = Confidence.medium
 
 
+class RoutineSpec(BaseModel):
+    """A reminder rule the caregiver stated out loud, for the app to confirm and save.
+
+    "After a feeding, give vitamin D in 30 minutes" -> after_event; "every day at 8pm,
+    bath" -> daily. The app turns this into a POST /routines once confirmed.
+    """
+
+    kind: str  # "after_event" | "daily"
+    message: str
+    trigger_type: Optional[str] = None
+    delay_min: Optional[int] = None
+    time_local: Optional[str] = None  # "HH:MM"
+
+
 class StructuredResult(BaseModel):
     """What the LLM returns for a single utterance."""
 
@@ -67,6 +81,9 @@ class StructuredResult(BaseModel):
     # A settings change requested by voice, e.g. {"temp": "f", "volume": "oz"}.
     # When present, the app applies it instead of saving an event.
     settings: Optional[dict[str, Any]] = None
+    # A reminder rule requested by voice. When present, the app offers to save it as a
+    # routine instead of logging an event.
+    routine: Optional[RoutineSpec] = None
     lang: str = "ko"
 
     # For update/delete: the record the server believes "the last feeding" means.

@@ -2,6 +2,7 @@ import 'package:dayby/api/api_client.dart';
 import 'package:dayby/main.dart';
 import 'package:dayby/models/event.dart';
 import 'package:dayby/models/family.dart';
+import 'package:dayby/models/routine.dart';
 import 'package:dayby/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,13 +15,37 @@ class _FakeApiClient extends ApiClient {
   final List<Baby> babies;
   final StructuredResult result;
   final List<Map<String, dynamic>> saved = [];
+  final List<Map<String, dynamic>> savedRoutines = [];
 
   @override
   Future<List<Baby>> listBabies() async => babies;
 
   @override
+  Future<List<Routine>> listRoutines() async => const [];
+
+  @override
   Future<List<Event>> listEvents({String? babyId, String? type, int limit = 100}) async =>
       const [];
+
+  @override
+  Future<Routine> createRoutine({
+    required RoutineKind kind,
+    required String message,
+    String? triggerType,
+    int? delayMin,
+    String? timeLocal,
+    String? babyId,
+  }) async {
+    savedRoutines.add({
+      'kind': kind,
+      'message': message,
+      'triggerType': triggerType,
+      'delayMin': delayMin,
+      'timeLocal': timeLocal,
+    });
+    return Routine(id: 'r1', kind: kind, message: message,
+        triggerType: triggerType, delayMin: delayMin, timeLocal: timeLocal);
+  }
 
   @override
   Future<StructuredResult> ingestText(
@@ -142,5 +167,56 @@ void main() {
     expect(fake.saved, hasLength(1));
     expect(fake.saved.first['type'], 'feeding');
     expect(find.text('Saved to the timeline'), findsOneWidget);
+  });
+
+  testWidgets('a spoken rule: sentence -> reminder card -> set', (tester) async {
+    SharedPreferences.setMockInitialValues({'family_id': 'fam1'});
+    final prefs = await SharedPreferences.getInstance();
+    final fake = _FakeApiClient(
+      const [Baby(id: 'baby1', familyId: 'fam1', name: 'Ari')],
+      const StructuredResult(
+        events: [],
+        reply: 'Set a reminder to give vitamin D.',
+        routine: RoutineSpec(
+          kind: 'after_event',
+          message: 'Give vitamin D',
+          triggerType: 'feeding',
+          delayMin: 30,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPrefsProvider.overrideWithValue(prefs),
+          apiClientProvider.overrideWithValue(fake),
+        ],
+        child: const DaybyApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byType(TextField).first, 'after a feeding remind me to give vitamin D');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pumpAndSettle();
+
+    // It offers to set a rule, not to log an event.
+    expect(find.text('Set this reminder?'), findsOneWidget);
+    expect(find.text('After a feeding, 30 min later'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Set reminder'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Set reminder'));
+    await tester.pumpAndSettle();
+
+    expect(fake.savedRoutines, hasLength(1));
+    expect(fake.savedRoutines.first['triggerType'], 'feeding');
+    expect(fake.savedRoutines.first['delayMin'], 30);
+    expect(find.text('Reminder set'), findsOneWidget);
   });
 }

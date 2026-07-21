@@ -267,6 +267,7 @@ Return ONLY a JSON object with this exact shape:
   "needs_clarification": "<a question to ask if the utterance is ambiguous, else null>",
   "reply": "<one short, warm spoken sentence in the SAME language as the utterance: read back what you understood and offer to save it; for a question, a brief answer or follow-up>",
   "settings": <null, or an object of changed settings; for units use keys temp (c|f), weight (kg|g|lb), length (cm|m|in), volume (ml|oz)>,
+  "routine": <null, or a reminder rule the caregiver is setting up (see the rule below)>,
   "lang": "<ISO language code of the utterance, e.g. ko or en>"
 }}
 
@@ -299,6 +300,16 @@ Rules:
 - If the caregiver asks to change a unit/setting ("use Fahrenheit", "log feeds in ounces",
   "show weight in pounds"), set "settings" with the changed keys and leave events empty. Still
   write a "reply" confirming the change. The examples are English; the request will often not be.
+- If the caregiver is setting up a standing REMINDER RULE for the future rather than logging
+  something that happened ("after every feeding remind me to give vitamin D", "remind me to give
+  the supplement 30 minutes after each feed", "every day at 8pm, bath time"), set "routine" and
+  leave events empty. Two shapes:
+    - after an event: {{"kind": "after_event", "trigger_type": "<a standard type, e.g. feeding>",
+      "delay_min": <minutes after it, 0 if none is said>, "message": "<what to be reminded>"}}
+    - a daily time: {{"kind": "daily", "time_local": "HH:MM" on their clock, "message": "<...>"}}
+  Put what to be reminded of in "message", in the caregiver's own language, and still write a
+  "reply" confirming the rule. A rule is about what to do NEXT TIME or EVERY TIME; logging is
+  about what just happened. "I fed her and gave vitamin D" is two logs, not a rule.
 - Resolve relative and clock times ("last night", "8am", "two hours ago") against the current
   local time above, in that same timezone. Return "time" as ISO 8601 (with the offset, or UTC "Z").
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,

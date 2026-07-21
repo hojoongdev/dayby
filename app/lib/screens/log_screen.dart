@@ -9,6 +9,7 @@ import '../api/api_client.dart';
 import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
+import '../models/routine.dart';
 import '../providers.dart';
 import '../tts.dart';
 import '../voice.dart';
@@ -346,7 +347,10 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       if (reply != null && reply.isNotEmpty) {
         _history.add(_Msg(fromUser: false, text: reply));
       }
-      if (result.action == 'create' && result.events.isNotEmpty) {
+      if (result.routine != null) {
+        // A reminder rule to set up, not an event to log. Ask before saving it.
+        _pending = result;
+      } else if (result.action == 'create' && result.events.isNotEmpty) {
         _pending = result;
       } else if ((result.isUpdate || result.isDelete) && result.target != null) {
         // Something real is about to be changed or removed. Show which, and ask.
@@ -574,7 +578,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               : _appBubble(m.text,
                   subtitle: m.subtitle, saved: m.saved, isError: m.isError),
         if (_thinking) _appBubble('…'),
-        if (_pending != null && active != null)
+        if (_pending?.routine != null)
+          _routineCard(_pending!.routine!)
+        else if (_pending != null && active != null)
           switch (_pending!.action) {
             'update' => _changeCard(_pending!),
             'delete' => _deleteCard(_pending!),
@@ -592,6 +598,92 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         margin: const EdgeInsets.only(bottom: 10, right: 24),
         constraints: const BoxConstraints(maxWidth: 400),
         child: GlassCard(child: child),
+      ),
+    );
+  }
+
+  static const _triggerLabels = {
+    'feeding': 'a feeding',
+    'diaper': 'a diaper change',
+    'sleep': 'a sleep',
+    'bath': 'a bath',
+    'medicine': 'medicine',
+    'pumping': 'pumping',
+  };
+
+  String _describeSpec(RoutineSpec r) {
+    if (r.kind == 'daily') return 'Every day at ${r.timeLocal}';
+    final after = _triggerLabels[r.triggerType] ?? r.triggerType ?? 'an event';
+    final delay = r.delayMin ?? 0;
+    return delay > 0 ? 'After $after, $delay min later' : 'After $after';
+  }
+
+  Future<void> _saveRoutine(RoutineSpec r) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).createRoutine(
+            kind: r.kind == 'daily' ? RoutineKind.daily : RoutineKind.afterEvent,
+            message: r.message,
+            triggerType: r.triggerType,
+            delayMin: r.delayMin,
+            timeLocal: r.timeLocal,
+          );
+      ref.invalidate(routinesProvider);
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _pending = null;
+        _history.add(_Msg(
+          fromUser: false,
+          text: r.message,
+          subtitle: 'Reminder set',
+          saved: true,
+        ));
+      });
+      _scrollToBottom();
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
+    }
+  }
+
+  Widget _routineCard(RoutineSpec r) {
+    final theme = Theme.of(context);
+    return _actOnRecord(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.alarm_add_outlined,
+                  size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text('Set this reminder?', style: theme.textTheme.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(r.message, style: theme.textTheme.titleMedium),
+          const SizedBox(height: 2),
+          Text(_describeSpec(r),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _saving ? null : () => setState(() => _pending = null),
+                child: const Text('Cancel'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _saving ? null : () => _saveRoutine(r),
+                child: _saving ? _spinner() : const Text('Set reminder'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

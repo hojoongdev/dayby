@@ -115,6 +115,31 @@ class IngestPhotoResult {
       );
 }
 
+/// A reminder rule the caregiver stated out loud, for the app to confirm and save.
+class RoutineSpec {
+  const RoutineSpec({
+    required this.kind,
+    required this.message,
+    this.triggerType,
+    this.delayMin,
+    this.timeLocal,
+  });
+
+  final String kind; // "after_event" | "daily"
+  final String message;
+  final String? triggerType;
+  final int? delayMin;
+  final String? timeLocal;
+
+  factory RoutineSpec.fromJson(Map<String, dynamic> json) => RoutineSpec(
+        kind: json['kind'] as String,
+        message: json['message'] as String,
+        triggerType: json['trigger_type'] as String?,
+        delayMin: (json['delay_min'] as num?)?.toInt(),
+        timeLocal: json['time_local'] as String?,
+      );
+}
+
 class StructuredResult {
   const StructuredResult({
     this.action = 'create',
@@ -124,6 +149,7 @@ class StructuredResult {
     this.needsClarification,
     this.reply,
     this.settings,
+    this.routine,
     this.lang = 'ko',
   });
 
@@ -143,6 +169,9 @@ class StructuredResult {
 
   /// A settings change requested by voice, e.g. {"temp": "f"}.
   final Map<String, dynamic>? settings;
+
+  /// A reminder rule the caregiver set up by voice, for the app to confirm and save.
+  final RoutineSpec? routine;
   final String lang;
 
   bool get isUpdate => action == 'update';
@@ -161,6 +190,9 @@ class StructuredResult {
         needsClarification: json['needs_clarification'] as String?,
         reply: json['reply'] as String?,
         settings: (json['settings'] as Map?)?.cast<String, dynamic>(),
+        routine: json['routine'] == null
+            ? null
+            : RoutineSpec.fromJson(json['routine'] as Map<String, dynamic>),
         lang: json['lang'] as String? ?? 'ko',
       );
 }

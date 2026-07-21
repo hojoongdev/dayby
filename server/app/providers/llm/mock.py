@@ -16,6 +16,7 @@ from ...models.events import (
     Confidence,
     LlmContext,
     Role,
+    RoutineSpec,
     StructuredEvent,
     StructuredResult,
     Tip,
@@ -28,6 +29,60 @@ _NUMBER = re.compile(r"(\d+(?:\.\d+)?)")
 _QUESTION_HINTS = ("?", "when ", "how much", "how many", "how long", "last ", "total")
 _DELETE_HINTS = ("delete", "remove", "undo", "scratch that")
 _EDIT_HINTS = ("change", "correct", "actually", "make it", "fix")
+_DAILY_HINTS = ("every day", "each day", "daily")
+# A rule fires after an event only when it is clearly a standing rule, so a past log
+# ("gave vitamin D after her nap") is not mistaken for one.
+_AFTER_HINTS = ("remind", "each", "every")
+_TRIGGER_WORDS = {
+    "feeding": ("feeding", "feed", "bottle", "nursing", "formula"),
+    "diaper": ("diaper", "nappy"),
+    "sleep": ("sleep", "nap"),
+    "bath": ("bath",),
+    "medicine": ("medicine", "vitamin"),
+    "pumping": ("pump", "pumping"),
+}
+
+
+def _trigger_of(lower: str) -> Optional[str]:
+    for type_, words in _TRIGGER_WORDS.items():
+        if any(word in lower for word in words):
+            return type_
+    return None
+
+
+def _daily_time(lower: str) -> str:
+    """The HH:MM a daily rule fires at. Defaults to the evening when none is heard."""
+    match = (
+        re.search(r"\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", lower)
+        or re.search(r"\b(\d{1,2}):(\d{2})\b", lower)
+        or re.search(r"\b(\d{1,2})\s*(am|pm)\b", lower)
+    )
+    if not match:
+        return "20:00"
+    groups = match.groups()
+    hour = int(groups[0])
+    minute = int(groups[1]) if len(groups) > 1 and (groups[1] or "").isdigit() else 0
+    ampm = next((g for g in groups if g in ("am", "pm")), "")
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    return f"{hour:02d}:{minute % 60:02d}"
+
+
+def _rule_message(text: str) -> str:
+    """What is left of the utterance once the rule scaffolding is stripped off."""
+    message = text
+    for pattern in (
+        r"remind me to ", r"remind me ", r"please ",
+        r"after (each|every|a|the) \w+", r"after \w+ing",
+        r"every ?day( at)?", r"each day( at)?", r"daily( at)?",
+        r"in \d+ ?min(ute)?s?", r"at \d{1,2}(:\d{2})?\s*(a\.?m\.?|p\.?m\.?)?",
+        r"\b\d{1,2}:\d{2}\b",
+    ):
+        message = re.sub(pattern, " ", message, flags=re.IGNORECASE)
+    message = re.sub(r"\s+", " ", message).strip(" ,.")
+    return message or text
 
 
 def _first_number(text: str) -> int | float | None:
@@ -182,6 +237,11 @@ class MockLLMProvider(LLMProvider):
                 lang=lang,
             )
 
+        # A standing reminder rule, not a one-off log.
+        rule = self._maybe_rule(text, lower, lang)
+        if rule is not None:
+            return rule
+
         event = self._classify(text, lower, ctx.now, before)
         readback = event.type if not event.subtype else f"{event.type} ({event.subtype})"
         return StructuredResult(
@@ -189,6 +249,33 @@ class MockLLMProvider(LLMProvider):
             events=[event],
             reply=f"Got it: {readback}. Save it?",
             lang=lang,
+        )
+
+    def _maybe_rule(self, text: str, lower: str, lang: str) -> Optional[StructuredResult]:
+        """A reminder rule if the words set one up, otherwise None."""
+        trigger = _trigger_of(lower)
+        is_daily = any(hint in lower for hint in _DAILY_HINTS)
+        is_after = (
+            "after" in lower
+            and trigger is not None
+            and any(hint in lower for hint in _AFTER_HINTS)
+        )
+        if not is_daily and not is_after:
+            return None
+
+        message = _rule_message(text)
+        if is_daily:
+            spec = RoutineSpec(kind="daily", time_local=_daily_time(lower), message=message)
+        else:
+            delay = _first_number(lower) if "min" in lower else 0
+            spec = RoutineSpec(
+                kind="after_event",
+                trigger_type=trigger,
+                delay_min=int(delay) if delay else 0,
+                message=message,
+            )
+        return StructuredResult(
+            events=[], routine=spec, reply=f"Set a reminder: {message}. Save it?", lang=lang
         )
 
     def _classify(

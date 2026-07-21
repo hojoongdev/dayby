@@ -114,6 +114,44 @@ def test_a_rule_is_not_visible_to_another_family(clean_db):
         ).status_code == 404
 
 
+def _ingest(c: TestClient, fid: str, text: str) -> dict:
+    res = c.post("/ingest/text", headers=_headers(fid), json={"text": text})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def test_a_spoken_after_event_rule_becomes_a_routine_spec(clean_db):
+    with TestClient(app) as c:
+        fid = _family(c)
+        res = _ingest(c, fid, "after each feeding, give vitamin D in 30 minutes")
+        rule = res["routine"]
+        assert rule is not None
+        assert rule["kind"] == "after_event"
+        assert rule["trigger_type"] == "feeding"
+        assert rule["delay_min"] == 30
+        assert "vitamin D" in rule["message"]
+        # A rule is not also a logged event.
+        assert res["events"] == []
+
+
+def test_a_spoken_daily_rule_becomes_a_routine_spec(clean_db):
+    with TestClient(app) as c:
+        fid = _family(c)
+        res = _ingest(c, fid, "every day at 20:00, bath time")
+        rule = res["routine"]
+        assert rule["kind"] == "daily"
+        assert rule["time_local"] == "20:00"
+        assert "bath" in rule["message"].lower()
+
+
+def test_a_normal_log_is_not_mistaken_for_a_rule(clean_db):
+    with TestClient(app) as c:
+        fid = _family(c)
+        res = _ingest(c, fid, "120 ml formula")
+        assert res["routine"] is None
+        assert res["events"][0]["type"] == "feeding"
+
+
 def _tips(c: TestClient, fid: str, baby_id: str, now: datetime) -> dict:
     return c.get(
         "/assistant/tips",
