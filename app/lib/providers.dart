@@ -14,6 +14,7 @@ import 'lang.dart';
 import 'live.dart';
 import 'models/event.dart';
 import 'models/family.dart';
+import 'models/insights.dart';
 import 'models/routine.dart';
 import 'models/stats.dart';
 import 'models/tip.dart';
@@ -323,6 +324,15 @@ final tipsProvider = FutureProvider.family<AssistantTips, String>(
 /// a chart that does not move when you log something is a chart nobody trusts.
 final statsProvider = FutureProvider.family<Stats, String>(
   (ref, babyId) => ref.watch(apiClientProvider).stats(babyId: babyId),
+);
+
+/// Next-up predictions and the week's trends. Invalidated on every save: logging a
+/// feed moves the next-feed estimate.
+final insightsProvider = FutureProvider.family<Insights, String>(
+  (ref, babyId) => ref.watch(apiClientProvider).insights(
+        babyId: babyId,
+        lang: ref.watch(assistantLangProvider),
+      ),
 );
 
 /// The lifetime retrospective for one baby.

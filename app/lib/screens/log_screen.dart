@@ -442,6 +442,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     ref.invalidate(eventsProvider(babyId));
     ref.invalidate(tipsProvider(babyId));
     ref.invalidate(statsProvider(babyId));
+    ref.invalidate(insightsProvider(babyId));
     setState(() {
       _saving = false;
       _pending = null;
@@ -484,6 +485,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     // The new event may be exactly what the assistant was nudging about.
     ref.invalidate(tipsProvider(saved.babyId));
     ref.invalidate(statsProvider(saved.babyId));
+    // Logging a feed moves the next-feed estimate.
+    ref.invalidate(insightsProvider(saved.babyId));
     setState(() {
       _saving = false;
       _pending = null;

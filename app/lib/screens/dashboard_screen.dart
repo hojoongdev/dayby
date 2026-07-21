@@ -8,6 +8,7 @@ import '../providers.dart';
 import '../units.dart';
 import '../widgets/assistant_card.dart';
 import '../widgets/glass.dart';
+import '../widgets/insights_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -47,6 +48,7 @@ class _Dashboard extends ConsumerWidget {
       onRefresh: () async {
         ref.invalidate(eventsProvider(baby.id));
         ref.invalidate(tipsProvider(baby.id));
+        ref.invalidate(insightsProvider(baby.id));
         await ref.read(eventsProvider(baby.id).future);
       },
       child: eventsAsync.when(
@@ -98,6 +100,7 @@ class _Dashboard extends ConsumerWidget {
           ),
         ),
         AssistantCard(babyId: baby.id),
+        InsightsCard(babyId: baby.id),
         _StatCard(
           icon: Icons.local_drink_outlined,
           label: 'Last feeding',

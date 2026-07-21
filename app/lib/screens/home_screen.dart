@@ -72,6 +72,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ref.invalidate(eventsProvider(event.babyId));
       ref.invalidate(tipsProvider(event.babyId));
       ref.invalidate(statsProvider(event.babyId));
+      ref.invalidate(insightsProvider(event.babyId));
     });
 
     // Every time the assistant recalculates -- on launch, on a save, on the other

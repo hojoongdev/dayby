@@ -7,6 +7,7 @@ import '../auth.dart';
 import '../config.dart';
 import '../models/event.dart';
 import '../models/family.dart';
+import '../models/insights.dart';
 import '../models/routine.dart';
 import '../models/stats.dart';
 import '../models/tip.dart';
@@ -356,6 +357,16 @@ class ApiClient {
       'now': _localNowIso(),
     });
     return Stats.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// Looking forward and back: the next few things due, and the week's trends.
+  Future<Insights> insights({required String babyId, String? lang}) async {
+    final res = await _dio.get('/insights', queryParameters: {
+      'baby_id': babyId,
+      'lang': ?lang,
+      'now': _localNowIso(),
+    });
+    return Insights.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// The keepsake: everything ever logged for this baby, counted and told back.
