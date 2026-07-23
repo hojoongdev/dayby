@@ -12,15 +12,20 @@ class Family {
       );
 }
 
-/// A person on the family without an account — just a name to stamp records with.
+/// A person on the family without an account — a relation to the baby (Dad, Mum, ...)
+/// and a name, to stamp records with.
 class Caregiver {
-  const Caregiver({required this.id, required this.name});
+  const Caregiver({required this.id, required this.name, this.relation});
 
   final String id;
   final String name;
+  final String? relation;
 
-  factory Caregiver.fromJson(Map<String, dynamic> json) =>
-      Caregiver(id: json['id'] as String, name: json['name'] as String);
+  factory Caregiver.fromJson(Map<String, dynamic> json) => Caregiver(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        relation: json['relation'] as String?,
+      );
 }
 
 class Baby {

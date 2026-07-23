@@ -61,10 +61,60 @@ class _Board extends ConsumerWidget {
     ref.invalidate(statsProvider(baby.id));
   }
 
+  /// Quick actions that carry a value (a feed amount, a temperature) ask for it first;
+  /// the rest (a bath, a nap toggle) just log. A button that writes a blank record is
+  /// worse than no button.
+  Future<void> _quickEntry(
+      WidgetRef ref, BuildContext context, String type, {String? subtype}) async {
+    final units = ref.read(unitPrefsProvider);
+    switch (type) {
+      case 'feeding':
+        final ml = await _askAmount(context, 'Feed amount', units.volume);
+        if (ml != null && context.mounted) {
+          await _quickLog(ref, context, type,
+              subtype: subtype ?? 'bottle', fields: {'amount_ml': ml});
+        }
+      case 'pumping':
+        final ml = await _askAmount(context, 'Pumped', units.volume);
+        if (ml != null && context.mounted) {
+          await _quickLog(ref, context, type, fields: {'amount_ml': ml});
+        }
+      case 'temperature':
+        final c = await _askTemperature(context, units.temp);
+        if (c != null && context.mounted) {
+          await _quickLog(ref, context, type, fields: {'temp_c': c});
+        }
+      case 'diaper':
+        final kind = await _askChoice(context, 'Diaper', const ['wet', 'dirty', 'mixed']);
+        if (kind != null && context.mounted) {
+          await _quickLog(ref, context, type, subtype: kind);
+        }
+      case 'medicine':
+        final name = await _askText(context, 'Medicine', 'e.g. vitamin D');
+        if (name != null && context.mounted) {
+          await _quickLog(ref, context, type,
+              fields: name.isEmpty ? const {} : {'name': name});
+        }
+      case 'memo':
+        final note = await _askText(context, 'Note', 'Anything to remember');
+        if (note != null && note.isNotEmpty && context.mounted) {
+          await _quickLog(ref, context, type, note: note);
+        }
+      default:
+        await _quickLog(ref, context, type, subtype: subtype);
+    }
+  }
+
   /// One-tap log, with a line to say it landed and a way to take it back — a silent
   /// write reads as a dead button.
   Future<void> _quickLog(
-    WidgetRef ref, BuildContext context, String type, {String? subtype}) async {
+    WidgetRef ref,
+    BuildContext context,
+    String type, {
+    String? subtype,
+    Map<String, dynamic> fields = const {},
+    String? note,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final units = ref.read(unitPrefsProvider);
     try {
@@ -72,6 +122,8 @@ class _Board extends ConsumerWidget {
             babyId: baby.id,
             type: type,
             subtype: subtype,
+            fields: fields,
+            note: note,
             source: 'text',
           );
       _refresh(ref);
@@ -120,7 +172,7 @@ class _Board extends ConsumerWidget {
         sinceLabel: 'since feeding',
         at: feeding?.time,
         nextAt: _nextOf(insights, 'feeding'),
-        onAdd: () => _quickLog(ref, context, 'feeding', subtype: feeding?.subtype),
+        onAdd: () => _quickEntry(ref, context, 'feeding', subtype: feeding?.subtype),
       ),
       DashCard(
         icon: Icons.child_care_outlined,
@@ -129,7 +181,7 @@ class _Board extends ConsumerWidget {
         sinceLabel: 'since last change',
         at: diaper?.time,
         nextAt: _nextOf(insights, 'diaper'),
-        onAdd: () => _quickLog(ref, context, 'diaper', subtype: diaper?.subtype ?? 'wet'),
+        onAdd: () => _quickEntry(ref, context, 'diaper'),
       ),
       DashCard(
         icon: Icons.bedtime_outlined,
@@ -161,13 +213,87 @@ class _Board extends ConsumerWidget {
           AssistantCard(babyId: baby.id),
           ...cards,
           const SizedBox(height: 4),
-          _QuickRow(onLog: (type, subtype) => _quickLog(ref, context, type, subtype: subtype)),
+          _QuickRow(onLog: (type, subtype) => _quickEntry(ref, context, type)),
           const SizedBox(height: 12),
           InsightsCard(babyId: baby.id),
         ],
       ),
     );
   }
+}
+
+/// Ask for a volume in the caregiver's unit, return millilitres (what is stored).
+Future<double?> _askAmount(BuildContext context, String title, String unit) async {
+  final value = await _askNumber(context, title, unit);
+  if (value == null) return null;
+  return unit == 'oz' ? value * 29.5735 : value;
+}
+
+/// Ask for a temperature in the caregiver's unit, return Celsius (what is stored).
+Future<double?> _askTemperature(BuildContext context, String unit) async {
+  final value = await _askNumber(context, 'Temperature', unit == 'f' ? '°F' : '°C');
+  if (value == null) return null;
+  return unit == 'f' ? (value - 32) * 5 / 9 : value;
+}
+
+Future<double?> _askNumber(BuildContext context, String title, String unit) async {
+  final controller = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(suffixText: unit),
+        onSubmitted: (_) => Navigator.pop(ctx, true),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log')),
+      ],
+    ),
+  );
+  return ok == true ? double.tryParse(controller.text.trim()) : null;
+}
+
+Future<String?> _askText(BuildContext context, String title, String hint) async {
+  final controller = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: InputDecoration(hintText: hint),
+        onSubmitted: (_) => Navigator.pop(ctx, true),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log')),
+      ],
+    ),
+  );
+  return ok == true ? controller.text.trim() : null;
+}
+
+Future<String?> _askChoice(
+    BuildContext context, String title, List<String> options) async {
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      title: Text(title),
+      children: [
+        for (final option in options)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, option),
+            child: Text('${option[0].toUpperCase()}${option.substring(1)}'),
+          ),
+      ],
+    ),
+  );
 }
 
 String _sleepDetail(Event? sleep, UnitPrefs units) {
@@ -213,7 +339,16 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(baby.name, style: theme.textTheme.headlineSmall),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(baby.name, style: theme.textTheme.headlineSmall),
+                if (baby.birthdate != null)
+                  Text(formatAge(baby.birthdate!),
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
           ),
           if (baby.birthdate != null)
             Container(

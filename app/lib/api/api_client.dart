@@ -53,8 +53,9 @@ class ApiClient {
     }
   }
 
-  Future<Caregiver> addCaregiver(String name) async {
-    final res = await _dio.post('/families/caregivers', data: {'name': name});
+  Future<Caregiver> addCaregiver(String name, {String? relation}) async {
+    final res = await _dio.post('/families/caregivers',
+        data: {'name': name, 'relation': ?relation});
     return Caregiver.fromJson(res.data as Map<String, dynamic>);
   }
 

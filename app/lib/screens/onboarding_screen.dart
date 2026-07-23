@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
+import '../format.dart';
 import '../models/family.dart';
 import '../providers.dart';
 
@@ -17,6 +18,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _babyName = TextEditingController();
   final _yourName = TextEditingController();
   final _server = TextEditingController();
+  String? _relation;
+  DateTime? _birthdate;
+  String? _sex;
   bool _saving = false;
 
   @override
@@ -36,33 +40,50 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
-  /// Save the server address so every client rebuilds against it before the first call.
   Future<void> _useServer() =>
       ref.read(serverUrlProvider.notifier).set(_server.text);
 
-  /// With no login, register this device's caregiver by name so its records are stamped
-  /// "Dad"/"Mum". When signed in, the account already is the author, so skip it.
+  /// With no login, register this device's caregiver so its records are stamped with a
+  /// name/relation. When signed in, the account is already the author, so skip it.
   Future<void> _registerCaregiver(ApiClient api) async {
+    if (ref.read(sessionProvider).value != null) return;
     final name = _yourName.text.trim();
-    if (name.isEmpty || ref.read(sessionProvider).value != null) return;
-    final me = await api.addCaregiver(name);
+    final display = name.isEmpty ? (_relation ?? 'Me') : name;
+    final me = await api.addCaregiver(display, relation: _relation);
     api.setCaregiverId(me.id);
     await ref.read(sharedPrefsProvider).setString(caregiverIdKey, me.id);
   }
 
-  Future<void> _submit() async {
-    final familyName = _familyName.text.trim();
-    final babyName = _babyName.text.trim();
-    if (familyName.isEmpty || babyName.isEmpty) return;
+  String? _missing() {
+    final missing = [
+      if (_familyName.text.trim().isEmpty) 'a family name',
+      if (_relation == null) 'whether you are Dad or Mum',
+      if (_babyName.text.trim().isEmpty) "your baby's name",
+      if (_birthdate == null) "your baby's birthday",
+      if (_sex == null) "your baby's sex",
+    ];
+    return missing.isEmpty ? null : 'Please add ${missing.join(', ')}.';
+  }
 
+  Future<void> _submit() async {
+    final missing = _missing();
+    if (missing != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(missing)));
+      return;
+    }
     setState(() => _saving = true);
     try {
       await _useServer();
       final api = ref.read(apiClientProvider);
-      final family = await api.createFamily(familyName);
+      final family = await api.createFamily(_familyName.text.trim());
       api.setFamilyId(family.id);
       await _registerCaregiver(api);
-      final baby = await api.addBaby(name: babyName);
+      final baby = await api.addBaby(
+        name: _babyName.text.trim(),
+        birthdate: _birthdate,
+        sex: _sex,
+      );
       await _remember(family);
       await ref.read(selectedBabyIdProvider.notifier).set(baby.id);
       await ref.read(familyIdProvider.notifier).set(family.id);
@@ -70,7 +91,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create your family: $e')),
+        SnackBar(content: Text('Could not create your family: ${friendlyError(e)}')),
       );
     }
   }
@@ -82,9 +103,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     ref.read(sessionProvider.notifier).joinedFamily(family.id);
   }
 
-  /// The other half of the invite code: the second parent joins the family that is
-  /// already there, rather than starting a second one.
+  /// The second caregiver joins the family that is already there rather than starting
+  /// another one. They still register themselves (Dad/Mum) so their logs are stamped.
   Future<void> _join() async {
+    if (_relation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('First pick whether you are Dad or Mum.')),
+      );
+      return;
+    }
     final code = await showDialog<String>(
       context: context,
       builder: (ctx) => _InviteCodeDialog(),
@@ -108,28 +135,36 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
+  Future<void> _pickBirthdate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _birthdate ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      helpText: "Baby's birthday",
+    );
+    if (picked != null) setState(() => _birthdate = picked);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: const BoxConstraints(maxWidth: 440),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Welcome to Dayby',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+                  Text('Welcome to Dayby', style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 8),
-                  Text(
-                    'Create your family to start logging.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  Text('Set up your family to start logging.',
+                      style: theme.textTheme.bodyMedium),
                   const SizedBox(height: 24),
                   TextField(
                     controller: _server,
@@ -150,20 +185,60 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       hintText: 'The Kim family',
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  _Label('You', theme),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'Dad', label: Text('Dad')),
+                      ButtonSegment(value: 'Mum', label: Text('Mum')),
+                      ButtonSegment(value: 'Other', label: Text('Other')),
+                    ],
+                    emptySelectionAllowed: true,
+                    selected: {?_relation},
+                    onSelectionChanged: (s) =>
+                        setState(() => _relation = s.isEmpty ? null : s.first),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _yourName,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      labelText: 'Your name',
-                      hintText: 'Dad or Mum',
+                      labelText: 'Your name (optional)',
+                      hintText: 'Shown on what you log',
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  _Label('Baby', theme),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: _babyName,
-                    onSubmitted: (_) => _submit(),
                     decoration: const InputDecoration(labelText: "Baby's name"),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickBirthdate,
+                          icon: const Icon(Icons.cake_outlined),
+                          label: Text(_birthdate == null
+                              ? 'Birthday'
+                              : formatDate(_birthdate!)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'female', label: Text('Girl')),
+                      ButtonSegment(value: 'male', label: Text('Boy')),
+                    ],
+                    emptySelectionAllowed: true,
+                    selected: {?_sex},
+                    onSelectionChanged: (s) =>
+                        setState(() => _sex = s.isEmpty ? null : s.first),
                   ),
                   const SizedBox(height: 28),
                   FilledButton(
@@ -176,11 +251,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           )
                         : const Text('Get started'),
                   ),
-                  if (ref.watch(sessionProvider).value != null)
-                    TextButton(
-                      onPressed: _saving ? null : _join,
-                      child: const Text('Join with an invite code'),
-                    ),
+                  TextButton(
+                    onPressed: _saving ? null : _join,
+                    child: const Text('Join a family with an invite code'),
+                  ),
                 ],
               ),
             ),
@@ -189,6 +263,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ),
     );
   }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text, this.theme);
+
+  final String text;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text,
+            style: theme.textTheme.labelLarge
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      );
 }
 
 class _InviteCodeDialog extends StatelessWidget {
