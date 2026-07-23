@@ -41,7 +41,11 @@ MEMOS = (
     "grandma visited",
     "took the bottle from dad without a fight",
 )
-PURCHASES = (("nappies, size 3", 34), ("formula, 2 tins", 48), ("sleep sacks", 26))
+PURCHASES = (
+    ("nappies, size 3", 34), ("formula, 2 tins", 48), ("sleep sacks", 26),
+    ("wipes, bulk pack", 22), ("teething toys", 15), ("onesies 3-6m", 40),
+    ("bibs and burp cloths", 18), ("a baby monitor", 89),
+)
 # Rough, and only so a demo does not read "32 KRW for nappies".
 RATES = {"USD": 1, "EUR": 0.9, "GBP": 0.8, "KRW": 1350, "JPY": 150}
 
@@ -242,8 +246,12 @@ def _extras(
     # Today is only part of a day, and anything dated after now is dropped. The
     # once-a-week things go on a day that has already finished, so they always land.
     settled = days[:-1] or days
+    weeks = max(1, len(settled) // 7)
 
-    for day in (days[0], settled[-1]):
+    # A growth measurement about once a week, so the curve has real shape over a month
+    # rather than two dots and a straight line between them.
+    growth_days = sorted(set(days[::7]) | {days[0], settled[-1]})
+    for day in growth_days:
         months = (day - birth).days / DAYS_A_MONTH
         t.add(_at(day, 600, tz), "growth", fields={
             "weight_kg": round(3.3 + months * 0.62 + rng.uniform(-0.1, 0.1), 2),
@@ -280,10 +288,13 @@ def _extras(
     t.add(_at(days[min(len(days) - 1, len(days) // 2 + 1)], 555, tz), "temperature",
           fields={"temp_c": 36.8}, raw_text="temperature back to normal")
 
-    for day in rng.sample(settled, min(2, len(settled))):
+    # A handful more of the memorable things the longer the window is, but never more
+    # than there are distinct ones to say.
+    milestone_days = rng.sample(settled, min(weeks + 1, len(settled), len(MILESTONES)))
+    for day, milestone in zip(sorted(milestone_days), rng.sample(MILESTONES, len(milestone_days))):
         t.add(_at(day, rng.randint(600, 1140), tz), "milestone",
-              note=rng.choice(MILESTONES), raw_text="something to remember")
-    for day in rng.sample(settled, min(2, len(settled))):
+              note=milestone, raw_text="something to remember")
+    for day in rng.sample(settled, min(weeks, len(settled), len(MEMOS))):
         t.add(_at(day, rng.randint(900, 1200), tz), "memo", note=rng.choice(MEMOS))
 
     for day, (item, usd) in zip(rng.sample(settled, min(len(PURCHASES), len(settled))), PURCHASES):
