@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../format.dart';
+import '../charts/palette.dart';
 import '../models/event.dart';
 import '../models/family.dart';
+import '../models/insights.dart';
 import '../providers.dart';
 import '../units.dart';
 import '../widgets/assistant_card.dart';
+import '../widgets/dash_card.dart';
 import '../widgets/glass.dart';
-import '../widgets/insights_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -28,7 +29,7 @@ class DashboardScreen extends ConsumerWidget {
           SafeArea(
             child: active == null
                 ? const Center(child: Text('Add a baby in Settings to begin.'))
-                : _Dashboard(baby: active),
+                : _Board(baby: active),
           ),
         ],
       ),
@@ -36,33 +37,10 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _Dashboard extends ConsumerWidget {
-  const _Dashboard({required this.baby});
+class _Board extends ConsumerWidget {
+  const _Board({required this.baby});
 
   final Baby baby;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final eventsAsync = ref.watch(eventsProvider(baby.id));
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(eventsProvider(baby.id));
-        ref.invalidate(tipsProvider(baby.id));
-        ref.invalidate(insightsProvider(baby.id));
-        await ref.read(eventsProvider(baby.id).future);
-      },
-      child: eventsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ListView(children: [
-          Padding(
-            padding: const EdgeInsets.all(32),
-            child: Center(child: Text('Could not load: $e')),
-          ),
-        ]),
-        data: (events) => _content(context, events),
-      ),
-    );
-  }
 
   Event? _lastOf(List<Event> events, String type) {
     for (final e in events) {
@@ -71,133 +49,212 @@ class _Dashboard extends ConsumerWidget {
     return null;
   }
 
-  Widget _content(BuildContext context, List<Event> events) {
-    final theme = Theme.of(context);
+  DateTime? _nextOf(Insights? insights, String type) {
+    if (insights == null) return null;
+    for (final p in insights.predictions) {
+      if (p.type == type) return p.at;
+    }
+    return null;
+  }
+
+  Future<void> _quickLog(WidgetRef ref, String type, {String? subtype}) async {
+    await ref.read(apiClientProvider).createEvent(
+          babyId: baby.id,
+          type: type,
+          subtype: subtype,
+          source: 'text',
+        );
+    ref.invalidate(eventsProvider(baby.id));
+    ref.invalidate(insightsProvider(baby.id));
+    ref.invalidate(tipsProvider(baby.id));
+    ref.invalidate(statsProvider(baby.id));
+  }
+
+  /// Tapping sleep is a toggle: if she is asleep, this is the wake-up; if she is up,
+  /// she is going down. The server computes the nap length from the pair.
+  Future<void> _toggleSleep(WidgetRef ref, Event? lastSleep) {
+    final ending = lastSleep?.subtype == 'start';
+    return _quickLog(ref, 'sleep', subtype: ending ? 'end' : 'start');
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(eventsProvider(baby.id)).value ?? const <Event>[];
+    final insights = ref.watch(insightsProvider(baby.id)).value;
+    final units = ref.watch(unitPrefsProvider);
+    final ink = ChartInk.of(context);
+
     final feeding = _lastOf(events, 'feeding');
     final diaper = _lastOf(events, 'diaper');
     final sleep = _lastOf(events, 'sleep');
-    final growth = _lastOf(events, 'growth');
-    final todayFeeds =
-        events.where((e) => e.type == 'feeding' && isToday(e.time)).length;
-    final todayDiapers =
-        events.where((e) => e.type == 'diaper' && isToday(e.time)).length;
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(baby.name, style: theme.textTheme.headlineMedium),
-              if (baby.birthdate != null)
-                Text(formatAge(baby.birthdate!),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-            ],
-          ),
-        ),
-        AssistantCard(babyId: baby.id),
-        InsightsCard(babyId: baby.id),
-        _StatCard(
-          icon: Icons.local_drink_outlined,
-          label: 'Last feeding',
-          event: feeding,
-        ),
-        _StatCard(
-          icon: Icons.baby_changing_station_outlined,
-          label: 'Last diaper',
-          event: diaper,
-        ),
-        // A sleep that started and has not ended is a baby who is asleep right now,
-        // which is a different thing to know than when she last slept.
-        if (sleep?.subtype == 'start')
-          _StatCard(
-            icon: Icons.bedtime,
-            label: 'Asleep for',
-            event: sleep,
-            value: formatMinutes(DateTime.now().difference(sleep!.time).inMinutes),
-          )
-        else
-          _StatCard(
-            icon: Icons.bedtime_outlined,
-            label: 'Last sleep',
-            event: sleep,
-          ),
-        GlassCard(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              _Metric(value: '$todayFeeds', label: 'Feedings today'),
-              const SizedBox(width: 12),
-              _Metric(value: '$todayDiapers', label: 'Diapers today'),
-            ],
-          ),
-        ),
-        if (growth != null)
-          _StatCard(
-            icon: Icons.straighten_outlined,
-            label: 'Latest growth',
-            event: growth,
-          ),
-      ],
+    final cards = <Widget>[
+      DashCard(
+        icon: Icons.local_drink_outlined,
+        accent: ink.feeding,
+        detail: _detail(feeding, units),
+        sinceLabel: 'since feeding',
+        at: feeding?.time,
+        nextAt: _nextOf(insights, 'feeding'),
+        onAdd: () => _quickLog(ref, 'feeding', subtype: feeding?.subtype),
+      ),
+      DashCard(
+        icon: Icons.child_care_outlined,
+        accent: ink.diaper,
+        detail: _detail(diaper, units),
+        sinceLabel: 'since last change',
+        at: diaper?.time,
+        nextAt: _nextOf(insights, 'diaper'),
+        onAdd: () => _quickLog(ref, 'diaper', subtype: diaper?.subtype ?? 'wet'),
+      ),
+      DashCard(
+        icon: Icons.bedtime_outlined,
+        accent: ink.sleep,
+        detail: _sleepDetail(sleep, units),
+        sinceLabel: 'since sleep',
+        at: sleep?.time,
+        // Asleep right now: the headline is how long she has been down, not "N ago".
+        headlineOverride: sleep?.subtype == 'start' && sleep != null
+            ? formatMinutes(DateTime.now().difference(sleep.time).inMinutes)
+            : null,
+        onAdd: () => _toggleSleep(ref, sleep),
+      ),
+    ];
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(eventsProvider(baby.id));
+        ref.invalidate(insightsProvider(baby.id));
+        ref.invalidate(tipsProvider(baby.id));
+        await ref.read(eventsProvider(baby.id).future);
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          _Header(baby: baby),
+          const SizedBox(height: 8),
+          AssistantCard(babyId: baby.id),
+          ...cards,
+          const SizedBox(height: 4),
+          _QuickRow(onLog: (type, subtype) => _quickLog(ref, type, subtype: subtype)),
+        ],
+      ),
     );
   }
 }
 
-class _StatCard extends ConsumerWidget {
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    this.event,
-    this.value,
-  });
+String _sleepDetail(Event? sleep, UnitPrefs units) {
+  if (sleep == null) return 'Not logged yet';
+  if (sleep.subtype == 'start') return 'Asleep';
+  final minutes = sleep.fields['duration_min'];
+  if (minutes is num) return 'Slept ${formatMinutes(minutes)}';
+  return _detail(sleep, units);
+}
 
-  final IconData icon;
-  final String label;
-  final Event? event;
+String _detail(Event? e, UnitPrefs units) {
+  if (e == null) return 'Not logged yet';
+  final parts = <String>[];
+  if (e.subtype != null && e.subtype!.isNotEmpty) {
+    parts.add('${e.subtype![0].toUpperCase()}${e.subtype!.substring(1)}');
+  }
+  e.fields.forEach((key, value) => parts.add(formatField(key, value, units)));
+  return parts.isEmpty
+      ? '${e.type[0].toUpperCase()}${e.type.substring(1)}'
+      : parts.join(' · ');
+}
 
-  /// Overrides the usual "N ago" headline, for a card that is about something
-  /// still happening rather than something that happened.
-  final String? value;
+class _Header extends StatelessWidget {
+  const _Header({required this.baby});
+
+  final Baby baby;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final units = ref.watch(unitPrefsProvider);
-    return GlassCard(
-      margin: const EdgeInsets.only(bottom: 12),
+    final initial = baby.name.isEmpty ? '?' : baby.name[0].toUpperCase();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
       child: Row(
         children: [
           CircleAvatar(
+            radius: 22,
             backgroundColor: theme.colorScheme.primaryContainer,
             foregroundColor: theme.colorScheme.onPrimaryContainer,
-            child: Icon(icon),
+            child: Text(initial,
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w600)),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 2),
-                if (event == null)
-                  Text('Not logged yet', style: theme.textTheme.titleMedium)
-                else ...[
-                  Text(value ?? formatAgo(event!.time),
-                      style: theme.textTheme.titleMedium),
-                  Text(
-                    eventSummary(event!.type, event!.subtype, event!.fields,
-                        units: units),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ],
+            child: Text(baby.name, style: theme.textTheme.headlineSmall),
+          ),
+          if (baby.birthdate != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text('D+${DateTime.now().difference(baby.birthdate!).inDays}',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "Other" row: one-tap logging for the things that do not get their own card.
+class _QuickRow extends StatelessWidget {
+  const _QuickRow({required this.onLog});
+
+  final void Function(String type, String? subtype) onLog;
+
+  static const _items = [
+    (icon: Icons.bathtub_outlined, type: 'bath', label: 'Bath'),
+    (icon: Icons.medication_outlined, type: 'medicine', label: 'Meds'),
+    (icon: Icons.thermostat_outlined, type: 'temperature', label: 'Temp'),
+    (icon: Icons.water_drop_outlined, type: 'pumping', label: 'Pump'),
+    (icon: Icons.sticky_note_2_outlined, type: 'memo', label: 'Note'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.brightness == Brightness.dark
+            ? const Color(0xFF121821).withValues(alpha: 0.82)
+            : Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: (theme.brightness == Brightness.dark ? Colors.white : Colors.black)
+              .withValues(alpha: 0.06),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Quick log',
+              style: theme.textTheme.labelLarge
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final item in _items)
+                Expanded(
+                  child: _QuickButton(
+                    icon: item.icon,
+                    label: item.label,
+                    onTap: () => onLog(item.type, null),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -205,27 +262,41 @@ class _StatCard extends ConsumerWidget {
   }
 }
 
-class _Metric extends StatelessWidget {
-  const _Metric({required this.value, required this.label});
+class _QuickButton extends StatelessWidget {
+  const _QuickButton({required this.icon, required this.label, required this.onTap});
 
-  final String value;
+  final IconData icon;
   final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700)),
-          Text(label,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-        ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(height: 6),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }

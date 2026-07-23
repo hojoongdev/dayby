@@ -63,9 +63,10 @@ void main() {
       (tester) async {
     await _pumpHome(tester, [_sleep('start', const Duration(minutes: 95))]);
 
-    expect(find.text('Asleep for'), findsOneWidget);
+    // The headline is how long she has been down, not "95m ago", and it says asleep.
+    expect(find.text('Asleep'), findsOneWidget);
     expect(find.text('1h 35m'), findsOneWidget);
-    expect(find.text('Last sleep'), findsNothing);
+    expect(find.text('1h 35m ago'), findsNothing);
   });
 
   testWidgets('once she is up, the card is about the nap she had', (tester) async {
@@ -74,8 +75,7 @@ void main() {
       _sleep('start', const Duration(minutes: 155)),
     ]);
 
-    expect(find.text('Last sleep'), findsOneWidget);
     expect(find.text('20m ago'), findsOneWidget);
-    expect(find.text('Sleep · end · 2h 15m'), findsOneWidget);
+    expect(find.text('Slept 2h 15m'), findsOneWidget);
   });
 }
