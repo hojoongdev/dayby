@@ -17,11 +17,13 @@ class ApiClient {
   ApiClient({
     String baseUrl = kApiBaseUrl,
     String? familyId,
+    String? caregiverId,
     AuthTokens? tokens,
     this.onTokensRefreshed,
   }) : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
     _tokens = tokens;
     setFamilyId(familyId);
+    setCaregiverId(caregiverId);
     _dio.interceptors.add(
       InterceptorsWrapper(onRequest: _authorize, onError: _refreshAndRetry),
     );
@@ -39,6 +41,28 @@ class ApiClient {
     } else {
       _dio.options.headers['X-Family-Id'] = familyId;
     }
+  }
+
+  /// Which caregiver this device is, so records get stamped with an author even when
+  /// nobody signs in.
+  void setCaregiverId(String? caregiverId) {
+    if (caregiverId == null || caregiverId.isEmpty) {
+      _dio.options.headers.remove('X-Caregiver-Id');
+    } else {
+      _dio.options.headers['X-Caregiver-Id'] = caregiverId;
+    }
+  }
+
+  Future<Caregiver> addCaregiver(String name) async {
+    final res = await _dio.post('/families/caregivers', data: {'name': name});
+    return Caregiver.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<List<Caregiver>> caregivers() async {
+    final res = await _dio.get('/families/caregivers');
+    return (res.data as List)
+        .map((c) => Caregiver.fromJson(c as Map<String, dynamic>))
+        .toList();
   }
 
   void _authorize(RequestOptions options, RequestInterceptorHandler handler) {

@@ -15,6 +15,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _familyName = TextEditingController();
   final _babyName = TextEditingController();
+  final _yourName = TextEditingController();
   final _server = TextEditingController();
   bool _saving = false;
 
@@ -30,6 +31,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void dispose() {
     _familyName.dispose();
     _babyName.dispose();
+    _yourName.dispose();
     _server.dispose();
     super.dispose();
   }
@@ -37,6 +39,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// Save the server address so every client rebuilds against it before the first call.
   Future<void> _useServer() =>
       ref.read(serverUrlProvider.notifier).set(_server.text);
+
+  /// With no login, register this device's caregiver by name so its records are stamped
+  /// "Dad"/"Mum". When signed in, the account already is the author, so skip it.
+  Future<void> _registerCaregiver(ApiClient api) async {
+    final name = _yourName.text.trim();
+    if (name.isEmpty || ref.read(sessionProvider).value != null) return;
+    final me = await api.addCaregiver(name);
+    api.setCaregiverId(me.id);
+    await ref.read(sharedPrefsProvider).setString(caregiverIdKey, me.id);
+  }
 
   Future<void> _submit() async {
     final familyName = _familyName.text.trim();
@@ -49,6 +61,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final api = ref.read(apiClientProvider);
       final family = await api.createFamily(familyName);
       api.setFamilyId(family.id);
+      await _registerCaregiver(api);
       final baby = await api.addBaby(name: babyName);
       await _remember(family);
       await ref.read(selectedBabyIdProvider.notifier).set(baby.id);
@@ -84,6 +97,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final api = ref.read(apiClientProvider);
       final family = await api.joinFamily(code);
       api.setFamilyId(family.id);
+      await _registerCaregiver(api);
       await _remember(family);
       await ref.read(familyIdProvider.notifier).set(family.id);
     } catch (e) {
@@ -134,6 +148,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Family name',
                       hintText: 'The Kim family',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _yourName,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Your name',
+                      hintText: 'Dad or Mum',
                     ),
                   ),
                   const SizedBox(height: 16),

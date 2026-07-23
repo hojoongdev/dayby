@@ -33,6 +33,7 @@ const spokenLanguagesKey = 'spoken_languages';
 const appLockKey = 'app_lock';
 const themeModeKey = 'theme_mode';
 const serverUrlKey = 'server_url';
+const caregiverIdKey = 'caregiver_id';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('overridden in main'),
@@ -72,6 +73,7 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     baseUrl: ref.watch(serverUrlProvider),
     familyId: prefs.getString(familyIdKey),
+    caregiverId: prefs.getString(caregiverIdKey),
     tokens: ref.watch(sessionProvider).value?.tokens,
     onTokensRefreshed: (tokens) => ref.read(tokenStoreProvider).write(tokens),
   );
@@ -223,12 +225,31 @@ final familyMembersProvider = FutureProvider<Map<String, AuthUser>>((ref) async 
   return {for (final member in members) member.id: member};
 });
 
+/// Everyone on the family, id -> name, so a record's created_by becomes "Dad" on the
+/// other phone even with nobody signed in. Includes the account-less caregivers.
+final caregiversProvider = FutureProvider<Map<String, String>>((ref) async {
+  if (ref.watch(familyIdProvider) == null) return const {};
+  try {
+    final list = await ref.watch(apiClientProvider).caregivers();
+    return {for (final c in list) c.id: c.name};
+  } catch (_) {
+    return const {};
+  }
+});
+
+/// This device's own caregiver id (no-auth) or signed-in user id, so its own logs carry
+/// no "who" label.
+final myLoggerIdProvider = Provider<String?>((ref) =>
+    ref.watch(sharedPrefsProvider).getString(caregiverIdKey) ??
+    ref.watch(sessionProvider).value?.user.id);
+
 /// What to call whoever logged a record: nothing if it was you (you know), and the other
-/// parent's name if it was not. Two people half asleep at 3am need to know which of them
-/// already did it.
+/// caregiver's name if it was not. Two people half asleep at 3am need to know which of
+/// them already did it.
 final loggedByProvider = Provider.family<String?, String?>((ref, userId) {
-  if (userId == null) return null;
-  if (userId == ref.watch(sessionProvider).value?.user.id) return null;
+  if (userId == null || userId == ref.watch(myLoggerIdProvider)) return null;
+  final name = ref.watch(caregiversProvider).value?[userId];
+  if (name != null) return name;
   final member = ref.watch(familyMembersProvider).value?[userId];
   return member?.name ?? member?.email ?? 'Someone else';
 });
