@@ -347,7 +347,10 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       if (reply != null && reply.isNotEmpty) {
         _history.add(_Msg(fromUser: false, text: reply));
       }
-      if (result.routine != null) {
+      if (result.message != null) {
+        // A note to the other caregiver, not an event to log. Ask before sending.
+        _pending = result;
+      } else if (result.routine != null) {
         // A reminder rule to set up, not an event to log. Ask before saving it.
         _pending = result;
       } else if (result.action == 'create' && result.events.isNotEmpty) {
@@ -581,7 +584,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               : _appBubble(m.text,
                   subtitle: m.subtitle, saved: m.saved, isError: m.isError),
         if (_thinking) _appBubble('…'),
-        if (_pending?.routine != null)
+        if (_pending?.message != null)
+          _messageCard(_pending!.message!)
+        else if (_pending?.routine != null)
           _routineCard(_pending!.routine!)
         else if (_pending != null && active != null)
           switch (_pending!.action) {
@@ -650,6 +655,66 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       setState(() => _saving = false);
       messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
     }
+  }
+
+  Future<void> _sendDraft(MessageDraft draft) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).sendMessage(draft.text);
+      ref.invalidate(messagesProvider);
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _pending = null;
+        _history.add(_Msg(
+          fromUser: false,
+          text: draft.text,
+          subtitle: 'Sent to your family',
+          saved: true,
+        ));
+      });
+      _scrollToBottom();
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
+    }
+  }
+
+  Widget _messageCard(MessageDraft draft) {
+    final theme = Theme.of(context);
+    return _actOnRecord(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.send_outlined, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text('Send to ${draft.to ?? 'your family'}?',
+                  style: theme.textTheme.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(draft.text, style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _saving ? null : () => setState(() => _pending = null),
+                child: const Text('Cancel'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _saving ? null : () => _sendDraft(draft),
+                child: _saving ? _spinner() : const Text('Send'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _routineCard(RoutineSpec r) {

@@ -177,6 +177,19 @@ final routinesProvider = FutureProvider<List<Routine>>(
   (ref) => ref.watch(apiClientProvider).listRoutines(),
 );
 
+/// Notes between caregivers. Only meaningful when signed in (there has to be someone
+/// to send to), so it stays empty when the server asks nobody to sign in.
+final messagesProvider = FutureProvider<List<Message>>((ref) async {
+  if (ref.watch(sessionProvider).value == null) return const <Message>[];
+  return ref.watch(apiClientProvider).messages();
+});
+
+/// How many notes the other parent has left that this one has not read yet.
+final unreadMessagesProvider = Provider<int>((ref) {
+  final messages = ref.watch(messagesProvider).value ?? const <Message>[];
+  return messages.where((m) => !m.mine && !m.read).length;
+});
+
 /// Everyone in this family, by id. A server that asks nobody to sign in has nobody in
 /// it, and then no record has an author -- which is honest, so it simply shows none.
 final familyMembersProvider = FutureProvider<Map<String, AuthUser>>((ref) async {

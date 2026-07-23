@@ -1,3 +1,7 @@
+import 'message.dart';
+
+export 'message.dart' show MessageDraft, Message;
+
 class Event {
   const Event({
     required this.id,
@@ -150,6 +154,7 @@ class StructuredResult {
     this.reply,
     this.settings,
     this.routine,
+    this.message,
     this.lang = 'ko',
   });
 
@@ -172,6 +177,9 @@ class StructuredResult {
 
   /// A reminder rule the caregiver set up by voice, for the app to confirm and save.
   final RoutineSpec? routine;
+
+  /// A note to the other caregiver, drafted by voice, for the app to confirm and send.
+  final MessageDraft? message;
   final String lang;
 
   bool get isUpdate => action == 'update';
@@ -193,6 +201,9 @@ class StructuredResult {
         routine: json['routine'] == null
             ? null
             : RoutineSpec.fromJson(json['routine'] as Map<String, dynamic>),
+        message: json['message'] == null
+            ? null
+            : MessageDraft.fromJson(json['message'] as Map<String, dynamic>),
         lang: json['lang'] as String? ?? 'ko',
       );
 }

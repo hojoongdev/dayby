@@ -28,7 +28,7 @@ def clean_db():
 
     client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=3000)
     db = client[settings.db_name]
-    for name in ("families", "babies", "events", "users", "routines"):
+    for name in ("families", "babies", "events", "users", "routines", "messages"):
         db[name].delete_many({})
     yield
     client.close()

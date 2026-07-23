@@ -123,6 +123,18 @@ class ApiClient {
     return Family.fromJson(res.data as Map<String, dynamic>);
   }
 
+  Future<List<Message>> messages() async {
+    final res = await _dio.get('/messages');
+    return (res.data as List)
+        .map((m) => Message.fromJson(m as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> sendMessage(String text) =>
+      _dio.post('/messages', data: {'text': text});
+
+  Future<void> markMessagesRead() => _dio.post('/messages/read');
+
   Future<List<Routine>> listRoutines() async {
     final res = await _dio.get('/routines');
     return (res.data as List)

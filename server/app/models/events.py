@@ -5,6 +5,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from .message import MessageDraft
+
 
 class Action(str, Enum):
     create = "create"
@@ -84,6 +86,8 @@ class StructuredResult(BaseModel):
     # A reminder rule requested by voice. When present, the app offers to save it as a
     # routine instead of logging an event.
     routine: Optional[RoutineSpec] = None
+    # A note to the other caregiver ("tell mum to buy diapers"). The app offers to send it.
+    message: Optional[MessageDraft] = None
     lang: str = "ko"
 
     # For update/delete: the record the server believes "the last feeding" means.

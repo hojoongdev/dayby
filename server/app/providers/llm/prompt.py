@@ -351,6 +351,7 @@ Return ONLY a JSON object with this exact shape:
   "reply": "<one short, warm spoken sentence in the SAME language as the utterance: read back what you understood and offer to save it; for a question, a brief answer or follow-up>",
   "settings": <null, or an object of changed settings; for units use keys temp (c|f), weight (kg|g|lb), length (cm|m|in), volume (ml|oz)>,
   "routine": <null, or a reminder rule the caregiver is setting up (see the rule below)>,
+  "message": <null, or a note to the other caregiver: {{"to": "<name or null>", "text": "<the note>"}}>,
   "lang": "<ISO language code of the utterance, e.g. ko or en>"
 }}
 
@@ -390,9 +391,14 @@ Rules:
     - after an event: {{"kind": "after_event", "trigger_type": "<a standard type, e.g. feeding>",
       "delay_min": <minutes after it, 0 if none is said>, "message": "<what to be reminded>"}}
     - a daily time: {{"kind": "daily", "time_local": "HH:MM" on their clock, "message": "<...>"}}
-  Put what to be reminded of in "message", in the caregiver's own language, and still write a
-  "reply" confirming the rule. A rule is about what to do NEXT TIME or EVERY TIME; logging is
-  about what just happened. "I fed her and gave vitamin D" is two logs, not a rule.
+  Put what to be reminded of in the rule's "message", in the caregiver's own language, and
+  still write a "reply" confirming the rule. A rule is about what to do NEXT TIME or EVERY
+  TIME; logging is about what just happened. "I fed her and gave vitamin D" is two logs.
+- If the caregiver is sending a NOTE to the other caregiver rather than logging or asking
+  ("tell mum to buy diapers", "엄마한테 기저귀 사라고 알려줘", "let dad know she has a fever"),
+  set "message" with the note text in their own language (and "to" as the name they used, if
+  any), and leave events empty. Still write a "reply" saying you will pass it on. This is
+  telling a person something, not a reminder rule and not a log of what happened.
 - Resolve relative and clock times ("last night", "8am", "two hours ago") against the current
   local time above, in that same timezone. Return "time" as ISO 8601 (with the offset, or UTC "Z").
 - Put measurable values in "fields" with consistent keys: feeding -> amount_ml or amount_oz,

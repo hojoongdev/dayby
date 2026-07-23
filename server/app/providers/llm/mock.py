@@ -25,6 +25,7 @@ from ...models.events import (
     UpcomingEvent,
     WrappedStats,
 )
+from ...models.message import MessageDraft
 from .base import LLMProvider
 
 _NUMBER = re.compile(r"(\d+(?:\.\d+)?)")
@@ -70,6 +71,18 @@ def _daily_time(lower: str) -> str:
     if ampm == "am" and hour == 12:
         hour = 0
     return f"{hour:02d}:{minute % 60:02d}"
+
+
+def _message_body(text: str) -> str:
+    """The note itself, once "tell mum to" / "엄마한테 ... 알려줘" is stripped off."""
+    body = text
+    for pattern in (
+        r"^tell \w+ to ", r"^let \w+ know( that)? ",
+        r"\w+한테 ", r"\w+에게 ",
+        r"(라)?고 (알려줘|전해줘|말해줘)\.?$", r" ?(알려줘|전해줘|말해줘)\.?$",
+    ):
+        body = re.sub(pattern, " ", body, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", body).strip(" ,.") or text
 
 
 def _rule_message(text: str) -> str:
@@ -268,6 +281,11 @@ class MockLLMProvider(LLMProvider):
                 lang=lang,
             )
 
+        # A note to the other caregiver, not a log.
+        message = self._maybe_message(text, lower, lang)
+        if message is not None:
+            return message
+
         # A standing reminder rule, not a one-off log.
         rule = self._maybe_rule(text, lower, lang)
         if rule is not None:
@@ -280,6 +298,24 @@ class MockLLMProvider(LLMProvider):
             events=[event],
             reply=f"Got it: {readback}. Save it?",
             lang=lang,
+        )
+
+    def _maybe_message(self, text: str, lower: str, lang: str) -> Optional[StructuredResult]:
+        """A note to the other caregiver if the words are addressed to a person."""
+        told = any(h in lower for h in ("알려줘", "전해줘", "말해줘")) or (
+            lower.startswith("tell ") or ("let " in lower and "know" in lower)
+        )
+        if not told:
+            return None
+        to = next(
+            (name for name in ("mommy", "mom", "mum", "daddy", "dad", "엄마", "아빠")
+             if name in lower),
+            None,
+        )
+        body = _message_body(text)
+        return StructuredResult(
+            events=[], message=MessageDraft(to=to, text=body),
+            reply=f"I'll pass it on: {body}", lang=lang,
         )
 
     def _maybe_rule(self, text: str, lower: str, lang: str) -> Optional[StructuredResult]:
