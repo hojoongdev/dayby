@@ -10,15 +10,17 @@ class FamilyCreate(BaseModel):
 
 
 class CaregiverCreate(BaseModel):
-    """A person on the family, without an account -- just a name to stamp records with
-    ('Dad', 'Mum'). For local use where nobody signs in."""
+    """A person on the family, without an account -- their relation to the baby (Dad,
+    Mum, ...) and their name, to stamp records with. For local use where nobody signs in."""
 
     name: str
+    relation: Optional[str] = None
 
 
 class Caregiver(BaseModel):
     id: str
     name: str
+    relation: Optional[str] = None
 
 
 class FamilyJoin(BaseModel):

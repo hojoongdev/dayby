@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
 from ..config import settings
 from ..db import get_db
-from ..deps import get_current_family, get_current_user
+from ..deps import get_caller, get_current_family, get_current_user
 from ..models.auth import UserOut
 from ..models.family import (
     BabyCreate,
@@ -81,9 +81,14 @@ async def create_family(
 @router.post("/families/join", response_model=FamilyOut)
 async def join_family(
     body: FamilyJoin,
-    user: dict = Depends(get_current_user),
+    caller: Optional[dict] = Depends(get_caller),
 ) -> FamilyOut:
-    """The other half of the invite code the app has been showing all along."""
+    """The other half of the invite code the app has been showing all along.
+
+    With a login, the joiner becomes a member. In local use with no login, there is no
+    member to add -- the second phone just needs to find the family, then it registers
+    its own caregiver -- so the code still resolves it without one.
+    """
     family = await get_db().families.find_one({"invite_code": body.invite_code.strip()})
     if family is None:
         raise HTTPException(status_code=404, detail="No family with that invite code")
@@ -94,9 +99,10 @@ async def join_family(
             status_code=410, detail="This invite code has expired. Ask for a new one."
         )
 
-    await get_db().families.update_one(
-        {"_id": family["_id"]}, {"$addToSet": {"members": user["_id"]}}
-    )
+    if caller:
+        await get_db().families.update_one(
+            {"_id": family["_id"]}, {"$addToSet": {"members": caller["_id"]}}
+        )
     return _family_out(family)
 
 
@@ -173,7 +179,7 @@ async def add_caregiver(
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="A caregiver needs a name")
-    caregiver = {"id": new_id(), "name": name}
+    caregiver = {"id": new_id(), "name": name, "relation": body.relation}
     await get_db().families.update_one(
         {"_id": family["_id"]}, {"$push": {"caregivers": caregiver}}
     )
