@@ -12,6 +12,8 @@ from ..models.family import (
     BabyCreate,
     BabyOut,
     BabyUpdate,
+    Caregiver,
+    CaregiverCreate,
     FamilyCreate,
     FamilyJoin,
     FamilyOut,
@@ -159,6 +161,35 @@ async def remove_member(
         UserOut(id=user["_id"], email=user.get("email"), name=user.get("name"))
         async for user in cursor
     ]
+
+
+@router.post("/families/caregivers", response_model=Caregiver, status_code=201)
+async def add_caregiver(
+    body: CaregiverCreate,
+    family: dict = Depends(get_current_family),
+) -> Caregiver:
+    """Register a caregiver by name (no account). The device then sends this id in
+    X-Caregiver-Id so its records are stamped 'Dad'/'Mum'."""
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="A caregiver needs a name")
+    caregiver = {"id": new_id(), "name": name}
+    await get_db().families.update_one(
+        {"_id": family["_id"]}, {"$push": {"caregivers": caregiver}}
+    )
+    return Caregiver(**caregiver)
+
+
+@router.get("/families/caregivers", response_model=list[Caregiver])
+async def list_caregivers(family: dict = Depends(get_current_family)) -> list[Caregiver]:
+    """Everyone on the family, so a record's created_by can become a name on the other
+    phone. Includes the account-less caregivers and any real members with a name."""
+    caregivers = [Caregiver(**c) for c in family.get("caregivers", [])]
+    if family.get("members"):
+        cursor = get_db().users.find({"_id": {"$in": family["members"]}})
+        async for user in cursor:
+            caregivers.append(Caregiver(id=user["_id"], name=user.get("name") or "Someone"))
+    return caregivers
 
 
 @router.post("/babies", response_model=BabyOut, status_code=201)

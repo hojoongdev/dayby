@@ -9,6 +9,18 @@ class FamilyCreate(BaseModel):
     name: str
 
 
+class CaregiverCreate(BaseModel):
+    """A person on the family, without an account -- just a name to stamp records with
+    ('Dad', 'Mum'). For local use where nobody signs in."""
+
+    name: str
+
+
+class Caregiver(BaseModel):
+    id: str
+    name: str
+
+
 class FamilyJoin(BaseModel):
     invite_code: str
 

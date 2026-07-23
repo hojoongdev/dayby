@@ -27,16 +27,23 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     return user
 
 
-async def get_caller(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+async def get_caller(
+    authorization: Optional[str] = Header(None),
+    x_caregiver_id: Optional[str] = Header(None, alias="X-Caregiver-Id"),
+) -> Optional[dict]:
     """Who is asking — when there is anybody to be.
 
-    With no identity provider configured the family is named in a header, and there is no
-    person behind the request. An event logged that way has no author, and saying so is
-    more honest than inventing one. It is a bypass, not a login.
+    With a real identity provider, the session says who. Without one (local use), a
+    device can still say which caregiver it is with the X-Caregiver-Id header — no login,
+    just "I am Dad" — and that stamps the record's author. It is a bypass, not a login,
+    so it only counts in development. Absent both, an event has no author, which is
+    honester than inventing one.
     """
-    if not settings.auth_enabled:
-        return None
-    return await get_current_user(authorization)
+    if settings.auth_enabled:
+        return await get_current_user(authorization)
+    if settings.is_development and x_caregiver_id:
+        return {"_id": x_caregiver_id}
+    return None
 
 
 async def get_current_family(
