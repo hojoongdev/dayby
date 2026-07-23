@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/api_client.dart';
 import '../charts/palette.dart';
+import '../format.dart';
 import '../models/event.dart';
 import '../models/family.dart';
 import '../models/insights.dart';
@@ -10,6 +12,7 @@ import '../units.dart';
 import '../widgets/assistant_card.dart';
 import '../widgets/dash_card.dart';
 import '../widgets/glass.dart';
+import '../widgets/insights_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -51,28 +54,55 @@ class _Board extends ConsumerWidget {
     return null;
   }
 
-  Future<void> _quickLog(WidgetRef ref, String type, {String? subtype}) async {
-    await ref.read(apiClientProvider).createEvent(
-          babyId: baby.id,
-          type: type,
-          subtype: subtype,
-          source: 'text',
-        );
+  void _refresh(WidgetRef ref) {
     ref.invalidate(eventsProvider(baby.id));
     ref.invalidate(insightsProvider(baby.id));
     ref.invalidate(tipsProvider(baby.id));
     ref.invalidate(statsProvider(baby.id));
   }
 
+  /// One-tap log, with a line to say it landed and a way to take it back — a silent
+  /// write reads as a dead button.
+  Future<void> _quickLog(
+    WidgetRef ref, BuildContext context, String type, {String? subtype}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final units = ref.read(unitPrefsProvider);
+    try {
+      final saved = await ref.read(apiClientProvider).createEvent(
+            babyId: baby.id,
+            type: type,
+            subtype: subtype,
+            source: 'text',
+          );
+      _refresh(ref);
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+            'Logged ${eventSummary(saved.type, saved.subtype, saved.fields, units: units)}'),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            await ref.read(apiClientProvider).deleteEvent(saved.id);
+            _refresh(ref);
+          },
+        ),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
   /// Tapping sleep is a toggle: if she is asleep, this is the wake-up; if she is up,
   /// she is going down. The server computes the nap length from the pair.
-  Future<void> _toggleSleep(WidgetRef ref, Event? lastSleep) {
+  Future<void> _toggleSleep(WidgetRef ref, BuildContext context, Event? lastSleep) {
     final ending = lastSleep?.subtype == 'start';
-    return _quickLog(ref, 'sleep', subtype: ending ? 'end' : 'start');
+    return _quickLog(ref, context, 'sleep', subtype: ending ? 'end' : 'start');
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Rebuild every 30s so "N ago" and the progress bars keep moving on their own.
+    ref.watch(dashboardClockProvider);
     final events = ref.watch(eventsProvider(baby.id)).value ?? const <Event>[];
     final insights = ref.watch(insightsProvider(baby.id)).value;
     final units = ref.watch(unitPrefsProvider);
@@ -90,7 +120,7 @@ class _Board extends ConsumerWidget {
         sinceLabel: 'since feeding',
         at: feeding?.time,
         nextAt: _nextOf(insights, 'feeding'),
-        onAdd: () => _quickLog(ref, 'feeding', subtype: feeding?.subtype),
+        onAdd: () => _quickLog(ref, context, 'feeding', subtype: feeding?.subtype),
       ),
       DashCard(
         icon: Icons.child_care_outlined,
@@ -99,7 +129,7 @@ class _Board extends ConsumerWidget {
         sinceLabel: 'since last change',
         at: diaper?.time,
         nextAt: _nextOf(insights, 'diaper'),
-        onAdd: () => _quickLog(ref, 'diaper', subtype: diaper?.subtype ?? 'wet'),
+        onAdd: () => _quickLog(ref, context, 'diaper', subtype: diaper?.subtype ?? 'wet'),
       ),
       DashCard(
         icon: Icons.bedtime_outlined,
@@ -111,7 +141,7 @@ class _Board extends ConsumerWidget {
         headlineOverride: sleep?.subtype == 'start' && sleep != null
             ? formatMinutes(DateTime.now().difference(sleep.time).inMinutes)
             : null,
-        onAdd: () => _toggleSleep(ref, sleep),
+        onAdd: () => _toggleSleep(ref, context, sleep),
       ),
     ];
 
@@ -131,7 +161,9 @@ class _Board extends ConsumerWidget {
           AssistantCard(babyId: baby.id),
           ...cards,
           const SizedBox(height: 4),
-          _QuickRow(onLog: (type, subtype) => _quickLog(ref, type, subtype: subtype)),
+          _QuickRow(onLog: (type, subtype) => _quickLog(ref, context, type, subtype: subtype)),
+          const SizedBox(height: 12),
+          InsightsCard(babyId: baby.id),
         ],
       ),
     );

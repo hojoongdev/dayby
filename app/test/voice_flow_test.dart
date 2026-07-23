@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:dayby/api/api_client.dart';
-import 'package:dayby/main.dart';
 import 'package:dayby/lang.dart';
 import 'package:dayby/models/event.dart';
 import 'package:dayby/models/family.dart';
 import 'package:dayby/providers.dart';
+import 'package:dayby/screens/log_screen.dart';
 import 'package:dayby/voice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -93,6 +93,9 @@ Future<(_FakeVoice, _FakeApiClient)> _openChat(WidgetTester tester) async {
   final voice = _FakeVoice();
   final api = _FakeApiClient();
 
+  // The chat opened straight, so the mic starts idle: these exercise the manual
+  // tap-to-record mechanics. (Opening it from the orb auto-starts; that path is covered
+  // by action_button_test.)
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -100,11 +103,9 @@ Future<(_FakeVoice, _FakeApiClient)> _openChat(WidgetTester tester) async {
         apiClientProvider.overrideWithValue(api),
         voiceRecorderProvider.overrideWithValue(voice),
       ],
-      child: const DaybyApp(),
+      child: const MaterialApp(home: LogScreen()),
     ),
   );
-  await tester.pumpAndSettle();
-  await tester.tap(find.byIcon(Icons.mic));
   await tester.pumpAndSettle();
   return (voice, api);
 }

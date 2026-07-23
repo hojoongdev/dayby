@@ -339,6 +339,15 @@ final statsProvider = FutureProvider.family<Stats, String>(
   (ref, babyId) => ref.watch(apiClientProvider).stats(babyId: babyId),
 );
 
+/// A tick every 30s, so "N ago" text and the fill-toward-next bars on the dashboard
+/// keep moving without a save or a pull-to-refresh. Watching it is enough to rebuild.
+final dashboardClockProvider = StreamProvider<DateTime>(
+  (ref) => Stream<DateTime>.periodic(
+    const Duration(seconds: 30),
+    (_) => DateTime.now(),
+  ),
+);
+
 /// Next-up predictions and the week's trends. Invalidated on every save: logging a
 /// feed moves the next-feed estimate.
 final insightsProvider = FutureProvider.family<Insights, String>(

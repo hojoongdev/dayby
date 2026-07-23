@@ -45,7 +45,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _consumePendingIntent();
+    if (state != AppLifecycleState.resumed) return;
+    _consumePendingIntent();
+    // Coming back to the app, catch up on anything the other parent did while it was
+    // away: their logs and, above all, their messages.
+    ref.invalidate(messagesProvider);
+    final baby = ref.read(activeBabyProvider);
+    if (baby != null) {
+      ref.invalidate(eventsProvider(baby.id));
+      ref.invalidate(tipsProvider(baby.id));
+    }
   }
 
   Future<void> _consumePendingIntent() async {
@@ -70,6 +79,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // The Action button or Siri asked to log by voice: bring the voice chat up, already
     // listening.
     ref.listen(voiceLaunchProvider, (_, _) => _openVoice(startVoice: true));
+
+    // Poll for the other parent's notes while the app is open, so a note and its unread
+    // badge arrive without reopening. (Live events ride a change stream; messages do not
+    // yet, so this is the cheap stand-in.)
+    ref.listen(dashboardClockProvider, (_, _) => ref.invalidate(messagesProvider));
 
     // A log from the other parent's phone: everything derived from the timeline catches up.
     ref.listen(liveEventsProvider, (_, next) {
@@ -121,7 +135,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           Positioned(
             right: 20,
             bottom: 24,
-            child: _VoiceOrb(onTap: _openVoice),
+            // A tap opens the chat already listening: this app is for talking to.
+            child: _VoiceOrb(onTap: () => _openVoice(startVoice: true)),
           ),
         ],
       ),
