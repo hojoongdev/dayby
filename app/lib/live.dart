@@ -16,7 +16,7 @@ class LiveConnection {
 /// Where live events come from. An interface so a test can push events through
 /// the app without a socket.
 abstract class LiveFeed {
-  LiveConnection connect(String familyId, {String? token});
+  LiveConnection connect(String familyId, {String? token, String? wsBaseUrl});
 }
 
 /// The real thing: a WebSocket the server feeds from a MongoDB change stream.
@@ -24,11 +24,11 @@ class WebSocketLiveFeed implements LiveFeed {
   const WebSocketLiveFeed();
 
   @override
-  LiveConnection connect(String familyId, {String? token}) {
+  LiveConnection connect(String familyId, {String? token, String? wsBaseUrl}) {
     // The session travels in the query string because a browser cannot put headers
     // on a WebSocket.
     final channel = WebSocketChannel.connect(
-      Uri.parse('$kWsBaseUrl/ws/events').replace(queryParameters: {
+      Uri.parse('${wsBaseUrl ?? kWsBaseUrl}/ws/events').replace(queryParameters: {
         'family_id': familyId,
         'token': ?token,
       }),

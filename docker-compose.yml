@@ -28,8 +28,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MONGODB_URI: mongodb://mongo:27017
-      DB_NAME: dayby
+      # Point at your own MongoDB (self-hosted or Atlas) by setting MONGODB_URI in .env;
+      # left unset, it uses the mongo container in this file.
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
+      DB_NAME: ${DB_NAME:-dayby}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       STT_PROVIDER: ${STT_PROVIDER:-mock}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

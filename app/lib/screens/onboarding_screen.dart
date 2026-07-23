@@ -15,14 +15,28 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _familyName = TextEditingController();
   final _babyName = TextEditingController();
+  final _server = TextEditingController();
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill with whatever the build baked in; the caregiver can point it at their
+    // own server (local, AWS, anywhere) before anything is created.
+    _server.text = ref.read(serverUrlProvider);
+  }
 
   @override
   void dispose() {
     _familyName.dispose();
     _babyName.dispose();
+    _server.dispose();
     super.dispose();
   }
+
+  /// Save the server address so every client rebuilds against it before the first call.
+  Future<void> _useServer() =>
+      ref.read(serverUrlProvider.notifier).set(_server.text);
 
   Future<void> _submit() async {
     final familyName = _familyName.text.trim();
@@ -31,6 +45,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     setState(() => _saving = true);
     try {
+      await _useServer();
       final api = ref.read(apiClientProvider);
       final family = await api.createFamily(familyName);
       api.setFamilyId(family.id);
@@ -65,6 +80,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     setState(() => _saving = true);
     try {
+      await _useServer();
       final api = ref.read(apiClientProvider);
       final family = await api.joinFamily(code);
       api.setFamilyId(family.id);
@@ -101,6 +117,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 24),
+                  TextField(
+                    controller: _server,
+                    keyboardType: TextInputType.url,
+                    autocorrect: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Server address',
+                      hintText: 'http://192.168.0.10:8000',
+                      helperText: 'Your Dayby server — run it yourself, anywhere.',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: _familyName,
                     textInputAction: TextInputAction.next,

@@ -109,6 +109,12 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: _appearance(ref),
             screen: const AppearanceScreen(),
           ),
+          ListTile(
+            leading: const Icon(Icons.dns_outlined),
+            title: const Text('Server'),
+            subtitle: Text(ref.watch(serverUrlProvider)),
+            onTap: () => _editServer(context, ref),
+          ),
           // Offered only where there is a sensor to ask.
           if (ref.watch(biometricsAvailableProvider).value ?? false) ...[
             const _SectionHeader('Privacy'),
@@ -302,6 +308,34 @@ class _MenuRow extends StatelessWidget {
 
 String _spoken(WidgetRef ref) =>
     ref.watch(spokenLanguagesProvider).map(languageName).join(', ');
+
+Future<void> _editServer(BuildContext context, WidgetRef ref) async {
+  final controller = TextEditingController(text: ref.read(serverUrlProvider));
+  final url = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Server address'),
+      content: TextField(
+        controller: controller,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: 'http://192.168.0.10:8000'),
+        onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+  if (url != null && url.isNotEmpty) {
+    await ref.read(serverUrlProvider.notifier).set(url);
+  }
+}
 
 String _appearance(WidgetRef ref) => switch (ref.watch(themeModeProvider)) {
       ThemeMode.system => 'Follows the phone',

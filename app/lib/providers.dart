@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api/api_client.dart';
 import 'app_lock.dart';
 import 'auth.dart';
+import 'config.dart';
 import 'google.dart';
 import 'intent_bridge.dart';
 import 'lang.dart';
@@ -31,6 +32,7 @@ const assistantLangKey = 'assistant_lang';
 const spokenLanguagesKey = 'spoken_languages';
 const appLockKey = 'app_lock';
 const themeModeKey = 'theme_mode';
+const serverUrlKey = 'server_url';
 
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('overridden in main'),
@@ -38,14 +40,37 @@ final sharedPrefsProvider = Provider<SharedPreferences>(
 
 final tokenStoreProvider = Provider<TokenStore>((ref) => const SecureTokenStore());
 
+/// Which backend the app talks to. Editable at runtime so anyone can run their own
+/// server (locally, on AWS, anywhere) and point the app at it. Defaults to whatever
+/// was baked in at build time. Changing it rebuilds every client that reads it.
+class ServerUrlNotifier extends Notifier<String> {
+  @override
+  String build() {
+    final saved = ref.watch(sharedPrefsProvider).getString(serverUrlKey);
+    return (saved != null && saved.isNotEmpty) ? saved : kApiBaseUrl;
+  }
+
+  Future<void> set(String url) async {
+    final clean = url.trim().replaceAll(RegExp(r'/+$'), '');
+    await ref.read(sharedPrefsProvider).setString(serverUrlKey, clean);
+    state = clean;
+  }
+}
+
+final serverUrlProvider =
+    NotifierProvider<ServerUrlNotifier, String>(ServerUrlNotifier.new);
+
 /// A client with no session attached, for the three calls that cannot have one:
 /// asking whether a sign-in is needed, signing in, and refreshing. Separate from
 /// apiClientProvider, which needs a session and would therefore be a circle.
-final anonymousApiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+final anonymousApiClientProvider = Provider<ApiClient>(
+  (ref) => ApiClient(baseUrl: ref.watch(serverUrlProvider)),
+);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final prefs = ref.watch(sharedPrefsProvider);
   return ApiClient(
+    baseUrl: ref.watch(serverUrlProvider),
     familyId: prefs.getString(familyIdKey),
     tokens: ref.watch(sessionProvider).value?.tokens,
     onTokensRefreshed: (tokens) => ref.read(tokenStoreProvider).write(tokens),
@@ -313,6 +338,7 @@ final liveEventsProvider = StreamProvider<Event>((ref) {
   final connection = ref.watch(liveFeedProvider).connect(
         familyId,
         token: ref.watch(sessionProvider).value?.tokens.access,
+        wsBaseUrl: wsFromHttp(ref.watch(serverUrlProvider)),
       );
   ref.onDispose(connection.close);
   return connection.events;
