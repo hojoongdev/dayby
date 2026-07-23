@@ -54,7 +54,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Log')); // switch from Home to the Log tab
+    await tester.tap(find.byIcon(Icons.mic)); // switch from Home to the Log tab
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'fed 120 ml');

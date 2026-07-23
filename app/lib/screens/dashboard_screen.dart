@@ -10,7 +10,6 @@ import '../units.dart';
 import '../widgets/assistant_card.dart';
 import '../widgets/dash_card.dart';
 import '../widgets/glass.dart';
-import 'messages_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -18,46 +17,16 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final active = ref.watch(activeBabyProvider);
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Dayby'),
-        backgroundColor: Colors.transparent,
-        actions: [
-          // Only where there is another caregiver to message: a signed-in family.
-          if (ref.watch(sessionProvider).value != null) const _MessageButton(),
-        ],
-      ),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: GlassBackground()),
-          SafeArea(
-            child: active == null
-                ? const Center(child: Text('Add a baby in Settings to begin.'))
-                : _Board(baby: active),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageButton extends ConsumerWidget {
-  const _MessageButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadMessagesProvider);
-    return IconButton(
-      tooltip: 'Messages',
-      onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const MessagesScreen()),
-      ),
-      icon: Badge.count(
-        count: unread,
-        isLabelVisible: unread > 0,
-        child: const Icon(Icons.chat_bubble_outline),
-      ),
+    // No app bar of its own: the shell owns the top bar and the tab switch.
+    return Stack(
+      children: [
+        const Positioned.fill(child: GlassBackground()),
+        SafeArea(
+          child: active == null
+              ? const Center(child: Text('Add a baby in Settings to begin.'))
+              : _Board(baby: active),
+        ),
+      ],
     );
   }
 }

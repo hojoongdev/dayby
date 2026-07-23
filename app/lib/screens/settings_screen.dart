@@ -25,13 +25,7 @@ class SettingsScreen extends ConsumerWidget {
     final session = ref.watch(sessionProvider).value;
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: Stack(children: [
+    return Stack(children: [
         const Positioned.fill(child: GlassBackground()),
         SafeArea(
           child: ListView(
@@ -149,8 +143,7 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
-      ]),
-    );
+      ]);
   }
 
   String _babySubtitle(Baby b) {

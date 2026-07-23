@@ -70,7 +70,7 @@ Future<_Fake> _pump(WidgetTester tester) async {
         sharedPrefsProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWithValue(fake),
       ],
-      child: const MaterialApp(home: DashboardScreen()),
+      child: const MaterialApp(home: Scaffold(body: DashboardScreen())),
     ),
   );
   await tester.pumpAndSettle();

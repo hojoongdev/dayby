@@ -6,6 +6,7 @@ import 'package:dayby/main.dart';
 import 'package:dayby/models/event.dart';
 import 'package:dayby/models/family.dart';
 import 'package:dayby/providers.dart';
+import 'package:dayby/screens/log_screen.dart';
 import 'package:dayby/voice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -83,17 +84,15 @@ void main() {
   testWidgets('the Action button opens the app already listening', (tester) async {
     final voice = await _launch(tester, action: 'log_voice');
 
-    // No tap: the shell moved to the Log tab and the mic opened on its own.
-    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(nav.selectedIndex, 1);
+    // No tap: the voice chat came up on its own and the mic opened.
+    expect(find.byType(LogScreen), findsOneWidget);
     expect(voice.opened, 1);
   });
 
   testWidgets('an ordinary launch stays on Home with the mic shut', (tester) async {
     final voice = await _launch(tester, action: null);
 
-    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(nav.selectedIndex, 0);
+    expect(find.byType(LogScreen), findsNothing);
     expect(voice.opened, 0);
   });
 }

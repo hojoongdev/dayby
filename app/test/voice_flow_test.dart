@@ -104,7 +104,7 @@ Future<(_FakeVoice, _FakeApiClient)> _openChat(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Log'));
+  await tester.tap(find.byIcon(Icons.mic));
   await tester.pumpAndSettle();
   return (voice, api);
 }

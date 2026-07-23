@@ -64,7 +64,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.list_alt_outlined));
+    await tester.tap(find.text('Records'));
     await tester.pumpAndSettle();
 
     expect(find.text('Today'), findsOneWidget);

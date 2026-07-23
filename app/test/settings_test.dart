@@ -57,7 +57,7 @@ Future<void> _openSettings(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  await tester.tap(find.byIcon(Icons.settings_outlined));
+  await tester.tap(find.text('Settings'));
   await tester.pumpAndSettle();
 }
 

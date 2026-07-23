@@ -55,7 +55,11 @@ class _Attachment {
 }
 
 class LogScreen extends ConsumerStatefulWidget {
-  const LogScreen({super.key});
+  const LogScreen({super.key, this.startVoice = false});
+
+  /// Open the mic as soon as the screen is up. The voice orb and the Action button
+  /// both bring this screen up already listening.
+  final bool startVoice;
 
   @override
   ConsumerState<LogScreen> createState() => _LogScreenState();
@@ -89,6 +93,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   @override
   void initState() {
     super.initState();
+    // Brought up by the orb or the Action button: start listening the moment the mic
+    // is ready (which _initVoice waits for).
+    _startWhenReady = widget.startVoice;
     _initVoice();
     _input.addListener(() {
       final typing = _input.text.trim().isNotEmpty;
@@ -121,18 +128,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     } catch (_) {
       if (mounted) setState(() => _voiceAvailable = false);
     }
-  }
-
-  /// Start recording because the Action button (or Siri) asked to. If the mic is still
-  /// being set up, remember to start the moment it is ready; if a recording is already
-  /// running, leave it alone.
-  void _startFromIntent() {
-    if (_listening || _opening) return;
-    if (!_voiceAvailable) {
-      _startWhenReady = true;
-      return;
-    }
-    _toggleMic();
   }
 
   void _scrollToBottom() {
@@ -531,10 +526,6 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   Widget build(BuildContext context) {
     final babies = ref.watch(babiesProvider).value ?? const <Baby>[];
     final active = ref.watch(activeBabyProvider);
-
-    // The Action button or Siri asked to log by voice. Open the mic off the same tick the
-    // shell used to switch here.
-    ref.listen(voiceLaunchProvider, (_, _) => _startFromIntent());
 
     return Scaffold(
       extendBodyBehindAppBar: true,

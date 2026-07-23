@@ -64,7 +64,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Timeline'));
+    await tester.tap(find.text('Records'));
     await tester.pumpAndSettle();
 
     // Half asleep at 3am, what you need to know is whether *she* already did it.

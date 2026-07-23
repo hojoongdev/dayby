@@ -38,22 +38,15 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   @override
   Widget build(BuildContext context) {
     final active = ref.watch(activeBabyProvider);
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Timeline'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: GlassBackground()),
-          SafeArea(
-            child: active == null
-                ? const Center(child: Text('Add a baby in Settings first.'))
-                : _body(active.id),
-          ),
-        ],
-      ),
+    return Stack(
+      children: [
+        const Positioned.fill(child: GlassBackground()),
+        SafeArea(
+          child: active == null
+              ? const Center(child: Text('Add a baby in Settings first.'))
+              : _body(active.id),
+        ),
+      ],
     );
   }
 

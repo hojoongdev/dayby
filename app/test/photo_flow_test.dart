@@ -118,7 +118,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.mic_none_outlined));
+    await tester.tap(find.byIcon(Icons.mic));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.add_a_photo_outlined));

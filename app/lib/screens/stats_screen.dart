@@ -23,17 +23,11 @@ class StatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final baby = ref.watch(activeBabyProvider);
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Stats'),
-        backgroundColor: Colors.transparent,
-      ),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: GlassBackground()),
-          SafeArea(
-            child: baby == null
+    return Stack(
+      children: [
+        const Positioned.fill(child: GlassBackground()),
+        SafeArea(
+          child: baby == null
                 ? const _Nothing('Add a baby to see how the days are going.')
                 : ref.watch(statsProvider(baby.id)).when(
                       loading: () => const Center(child: CircularProgressIndicator()),
@@ -45,7 +39,6 @@ class StatsScreen extends ConsumerWidget {
                     ),
           ),
         ],
-      ),
     );
   }
 }
