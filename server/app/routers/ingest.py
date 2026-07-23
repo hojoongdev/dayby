@@ -24,6 +24,7 @@ from ..models.events import (
 )
 from ..photos import store_photo
 from ..providers import get_llm_provider, get_stt_provider
+from ..query import run_plan
 from ..ratelimit import rate_limit_ingest
 from ..util import now
 from .events import event_out
@@ -71,29 +72,34 @@ def _held_to_language(result: StructuredResult, ctx: LlmContext) -> StructuredRe
     return result
 
 
-async def _recent_events(family: dict, limit: int = 200) -> list[dict]:
-    """Compact recent events for grounding a query answer (newest first)."""
-    out: list[dict] = []
-    cursor = get_db().events.find({"family_id": family["_id"]}).sort("time", -1).limit(limit)
-    async for e in cursor:
-        t = e.get("time")
-        out.append({
-            "type": e.get("type"),
-            "subtype": e.get("subtype"),
-            "fields": e.get("fields", {}),
-            "time": t.isoformat() if hasattr(t, "isoformat") else str(t),
-            "note": e.get("note"),
-        })
-    return out
+def _found_nothing(records: list[dict]) -> bool:
+    """Whether a query came back empty, aggregate or not."""
+    if not records:
+        return True
+    row = records[0]
+    if "aggregate" in row:
+        return row.get("value") in (None, 0) and row.get("count", 0) == 0
+    return False
 
 
 async def _answer_if_query(
     result: StructuredResult, family: dict, ctx: LlmContext, question: str
 ) -> StructuredResult:
-    """For a question, answer it from the logged events (grounded) into `reply`."""
+    """Answer a question over the whole history, grounded, into `reply`.
+
+    Two passes: the model turns the question into a query the server runs (so a record
+    logged months ago is still reachable), then writes the answer from what came back.
+    A record logged in one language and asked about in another can make the first query
+    too tight, so an empty result is retried with the wording filters dropped.
+    """
     if result.action == Action.query:
-        events = await _recent_events(family)
-        result.reply = await get_llm_provider().answer_query(question, events, ctx)
+        provider = get_llm_provider()
+        plan = await provider.plan_query(question, ctx)
+        records = await run_plan(plan, family["_id"], None, ctx.now.tzinfo)
+        if _found_nothing(records) and (plan.contains or plan.subtype):
+            broader = plan.model_copy(update={"contains": None, "subtype": None})
+            records = await run_plan(broader, family["_id"], None, ctx.now.tzinfo)
+        result.reply = await provider.answer_query(question, records, ctx)
     return result
 
 

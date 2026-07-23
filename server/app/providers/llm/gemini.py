@@ -18,6 +18,7 @@ from ...models.events import (
     Confidence,
     DayStat,
     LlmContext,
+    QueryPlan,
     StructuredEvent,
     StructuredResult,
     Tip,
@@ -29,6 +30,7 @@ from .prompt import (
     build_insights_instruction,
     build_photo_instruction,
     build_query_instruction,
+    build_query_plan_instruction,
     build_system_instruction,
     build_target_instruction,
     build_tips_instruction,
@@ -110,6 +112,24 @@ class GeminiLLMProvider(LLMProvider):
                 ],
                 lang=ctx.lang or "en",
             )
+
+    async def plan_query(self, question: str, ctx: LlmContext) -> QueryPlan:
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=f"Question: {question}",
+                config=types.GenerateContentConfig(
+                    system_instruction=build_query_plan_instruction(ctx),
+                    response_mime_type="application/json",
+                    temperature=0.0,  # planning a query is not a creative act
+                ),
+            )
+            return QueryPlan.model_validate_json((response.text or "{}").strip())
+        except Exception:
+            # An empty plan fetches recent records, which is the old behaviour and a safe
+            # floor: the answer pass can still work from those.
+            logger.exception("Gemini plan_query failed")
+            return QueryPlan()
 
     async def answer_query(
         self, question: str, events: list[dict], ctx: LlmContext

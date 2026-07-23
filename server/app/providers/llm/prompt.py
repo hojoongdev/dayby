@@ -156,17 +156,66 @@ Rules:
   than asking, because the caregiver is about to confirm a change to whatever you pick."""
 
 
-def build_query_instruction(ctx: LlmContext) -> str:
-    """Answer a question from the family's logged events only.
+def build_query_plan_instruction(ctx: LlmContext) -> str:
+    """Turn a question into a query over the whole history.
 
-    The history is for working out what the question refers to; the events are the only
+    Two passes answer a question: this one decides which records to fetch (so old ones,
+    far past a recent window, are reachable), and build_query_instruction then writes the
+    answer from whatever comes back.
+    """
+    profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
+    types_ = ", ".join(STANDARD_EVENT_TYPES)
+    return f"""Turn the caregiver's question into a query over their baby's logged records.
+
+Current time (their local time, with offset): {ctx.now.isoformat()}
+Baby (name, age, sex): {profiles}
+Standard event types (records may also use custom ones): {types_}
+
+Conversation so far (oldest first; "assistant" is you):
+{format_history(ctx.history)}
+
+Return ONLY this JSON:
+{{
+  "type": "<one event type to filter to, or null for any>",
+  "subtype": "<or null>",
+  "since": "<ISO 8601 start of the time range, or null>",
+  "until": "<ISO 8601 end of the time range, or null>",
+  "contains": "<a keyword to match in a record's text — a place, a brand, a title like 'hospital' — or null>",
+  "sort": "desc | asc",
+  "limit": <1-200>,
+  "aggregate": "<null | count | sum:FIELD | avg:FIELD | min:FIELD | max:FIELD>"
+}}
+
+Rules:
+- Resolve dates against the current time above. "in March" -> that month of the correct
+  year as since/until; "last week", "yesterday" -> the matching range. No time named -> null.
+- "the last / most recent X" -> sort "desc", limit 1. "the first / earliest" -> "asc", limit 1.
+- "how many / how often / total / average / highest / lowest" -> set aggregate: count, or
+  sum/avg/min/max of the field (e.g. sum:amount_ml for total feed volume, max:weight_kg for
+  the highest weight). Keep "type" set to the relevant kind.
+- A record may be stored in a different language or wording than the question: a feed
+  logged as "bottle" or "formula" for a question that says "분유"; a "check-up" for "검진".
+  So lean on "type", the date range, and "aggregate", which do not depend on wording. Set
+  "subtype" only when you are certain of its exact stored value, and use "contains" only for
+  a genuine proper noun (a clinic or brand name). When unsure, leave them null and let the
+  type filter do the work — a slightly broad query beats one that matches nothing.
+- Prefer a tight query, but never so tight it returns nothing: type + date is usually enough.
+- Output JSON only. No commentary."""
+
+
+def build_query_instruction(ctx: LlmContext) -> str:
+    """Answer a question from the records fetched for it.
+
+    The history is for working out what the question refers to; the records are the only
     source of facts. Without that split the model will confirm a number that was merely
     spoken and never logged.
     """
     profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
     return f"""You are a warm baby-care assistant. Answer the caregiver's question using ONLY
-the logged events you are given. If they do not contain the answer, say you don't have that
-logged yet. Be concise, and reply in the SAME language as the question.
+the records you are given. They were fetched for this question, and may be individual records
+or a single aggregate figure (a count, or a total/average of a field) — use whichever answers
+it. If they do not contain the answer, say you don't have that logged. Be concise, and reply
+in the SAME language as the question.
 
 Current time (the caller's local time, with offset): {ctx.now.isoformat()}
 Baby profiles (name, age, sex): {profiles}

@@ -92,6 +92,27 @@ class StructuredResult(BaseModel):
     target: Optional["EventOut"] = None
 
 
+class QueryPlan(BaseModel):
+    """How to fetch the records a question is about, across the whole history.
+
+    The model fills this in; the server translates it to a real query. The model never
+    writes Mongo, so a question can reach every record with no chance of an injected one.
+    """
+
+    type: Optional[str] = None
+    subtype: Optional[str] = None
+    since: Optional[datetime] = None
+    until: Optional[datetime] = None
+    # A word to match in a record's text, for things that are not a type: a place, a
+    # brand, an appointment title ("hospital", "병원").
+    contains: Optional[str] = None
+    sort: str = "desc"  # desc = most recent first
+    limit: int = 50
+    # None, "count", or "<op>:<field>" for op in sum/avg/min/max, so "total feed volume"
+    # is one number rather than a thousand records in the prompt.
+    aggregate: Optional[str] = None
+
+
 class LlmContext(BaseModel):
     """Context injected into the LLM for every utterance."""
 

@@ -7,6 +7,7 @@ from ...models.events import (
     CareSignal,
     DayStat,
     LlmContext,
+    QueryPlan,
     StructuredResult,
     Tip,
     UpcomingEvent,
@@ -24,10 +25,16 @@ class LLMProvider(ABC):
         ...
 
     @abstractmethod
+    async def plan_query(self, question: str, ctx: LlmContext) -> QueryPlan:
+        """Turn a question into a query over the whole history: which records to fetch,
+        or which aggregate to compute. The server runs it; the model never writes Mongo."""
+        ...
+
+    @abstractmethod
     async def answer_query(
         self, question: str, events: list[dict], ctx: LlmContext
     ) -> str:
-        """Answer a natural-language question grounded ONLY in the given events."""
+        """Answer a natural-language question grounded ONLY in the given records."""
         ...
 
     @abstractmethod

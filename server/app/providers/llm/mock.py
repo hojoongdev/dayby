@@ -16,6 +16,7 @@ from ...models.events import (
     Confidence,
     DayStat,
     LlmContext,
+    QueryPlan,
     Role,
     RoutineSpec,
     StructuredEvent,
@@ -105,12 +106,27 @@ def _said_before(ctx: LlmContext) -> str:
 class MockLLMProvider(LLMProvider):
     name = "mock"
 
+    async def plan_query(self, question: str, ctx: LlmContext) -> QueryPlan:
+        # A few clear shapes offline, so the whole two-pass query runs without a model.
+        lower = question.lower()
+        plan = QueryPlan(type=_trigger_of(lower))
+        if any(w in lower for w in ("last", "recent", "latest", "최근", "마지막")):
+            plan.sort = "desc"
+            plan.limit = 1
+        feed = any(w in lower for w in ("feed", "fed", "milk", "formula", "ate", "eaten", "먹"))
+        if any(w in lower for w in ("total", "how much", "총", "얼마나")) and feed:
+            plan.type = "feeding"
+            plan.aggregate = "sum:amount_ml"
+        elif any(w in lower for w in ("how many", "how often", "count", "몇 번", "몇번")):
+            plan.aggregate = "count"
+        return plan
+
     async def answer_query(
         self, question: str, events: list[dict], ctx: LlmContext
     ) -> str:
         # Offline stand-in: real answering needs a real model. Give a truthful
-        # fallback that still reflects the data size.
-        return f"I have {len(events)} logged events, but I need a real model to answer that."
+        # fallback that still reflects what was fetched.
+        return f"I found {len(events)} matching records, but I need a real model to answer that."
 
     async def proactive_tips(
         self,
