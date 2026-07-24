@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -127,6 +128,9 @@ class _Board extends ConsumerWidget {
             source: 'text',
           );
       _refresh(ref);
+      // Tapping sleep twice (down, then up) should not stack two bars that then sit
+      // there; the newest replaces the last.
+      messenger.hideCurrentSnackBar();
       messenger.showSnackBar(SnackBar(
         content: Text(
             'Logged ${eventSummary(saved.type, saved.subtype, saved.fields, units: units)}'),
@@ -224,10 +228,78 @@ class _Board extends ConsumerWidget {
 }
 
 /// Ask for a volume in the caregiver's unit, return millilitres (what is stored).
+/// A feed is a familiar range, not free text — spin a wheel to it. ml 30–300 by 10,
+/// or oz 1–10 by a half. Returns ml (what is stored).
 Future<double?> _askAmount(BuildContext context, String title, String unit) async {
-  final value = await _askNumber(context, title, unit);
-  if (value == null) return null;
-  return unit == 'oz' ? value * 29.5735 : value;
+  final oz = unit == 'oz';
+  final values = oz
+      ? [for (var v = 1.0; v <= 10.0; v += 0.5) v]
+      : [for (var v = 30.0; v <= 300.0; v += 10.0) v];
+  final start = () {
+    final i = values.indexOf(oz ? 4.0 : 120.0);
+    return i < 0 ? values.length ~/ 2 : i;
+  }();
+  final controller = FixedExtentScrollController(initialItem: start);
+  var index = start;
+
+  final picked = await showModalBottomSheet<double>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: GlassCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 4),
+                SizedBox(
+                  height: 180,
+                  child: CupertinoPicker(
+                    scrollController: controller,
+                    itemExtent: 40,
+                    onSelectedItemChanged: (i) => index = i,
+                    children: [
+                      for (final v in values)
+                        Center(
+                          child: Text(
+                            oz ? '$v oz' : '${v.toInt()} ml',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, values[index]),
+                        child: const Text('Log'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+  controller.dispose();
+  if (picked == null) return null;
+  return oz ? picked * 29.5735 : picked;
 }
 
 /// Ask for a temperature in the caregiver's unit, return Celsius (what is stored).
