@@ -20,7 +20,14 @@ class ApiClient {
     String? caregiverId,
     AuthTokens? tokens,
     this.onTokensRefreshed,
-  }) : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+  }) : _dio = Dio(BaseOptions(
+          baseUrl: baseUrl,
+          // Fail fast when the server is unreachable (wrong address, off the network),
+          // so the app can offer to fix it instead of spinning forever. The receive
+          // window stays wide because a grounded answer or the keepsake can take ~20s.
+          connectTimeout: const Duration(seconds: 6),
+          receiveTimeout: const Duration(seconds: 45),
+        )) {
     _tokens = tokens;
     setFamilyId(familyId);
     setCaregiverId(caregiverId);

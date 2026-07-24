@@ -106,6 +106,10 @@ class _EntryState extends ConsumerState<_Entry> with WidgetsBindingObserver {
     final config = ref.watch(authConfigProvider);
     final session = ref.watch(sessionProvider);
 
+    // The server did not answer -- a wrong address, or off the same network. Offer to fix
+    // the address instead of spinning on the splash forever.
+    if (config.hasError) return const _ServerUnreachable();
+
     // Deciding before the server has answered would flash the wrong screen.
     if (config.isLoading || session.isLoading) return const _Splash();
 
@@ -159,6 +163,99 @@ class _Splash extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the server does not answer -- almost always a stale address after the
+/// laptop's IP moved, or the phone dropping off the network. Lets them fix the address
+/// in place, without resetting the app and losing the family.
+class _ServerUnreachable extends ConsumerStatefulWidget {
+  const _ServerUnreachable();
+
+  @override
+  ConsumerState<_ServerUnreachable> createState() => _ServerUnreachableState();
+}
+
+class _ServerUnreachableState extends ConsumerState<_ServerUnreachable> {
+  late final TextEditingController _server =
+      TextEditingController(text: ref.read(serverUrlProvider));
+  bool _retrying = false;
+
+  @override
+  void dispose() {
+    _server.dispose();
+    super.dispose();
+  }
+
+  Future<void> _retry() async {
+    setState(() => _retrying = true);
+    await ref.read(serverUrlProvider.notifier).set(_server.text.trim());
+    // The api client watches the URL, so this refetches against the new address.
+    ref.invalidate(authConfigProvider);
+    ref.invalidate(sessionProvider);
+    if (mounted) setState(() => _retrying = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(28),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Icon(Icons.cloud_off_outlined,
+                          size: 44, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(height: 16),
+                      Text("Can't reach your server",
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Check the address below, and that this device is on the same '
+                        'network as the server.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: _server,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Server address',
+                          hintText: 'http://192.168.0.10:8000',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _retrying ? null : _retry,
+                        child: _retrying
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Save and retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],
