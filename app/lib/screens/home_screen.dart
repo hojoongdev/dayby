@@ -29,6 +29,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     SettingsScreen(),
   ];
   static const _labels = ['Dashboard', 'Records', 'Analysis', 'Settings'];
+  static const _icons = [
+    Icons.dashboard_outlined,
+    Icons.receipt_long_outlined,
+    Icons.insights_outlined,
+    Icons.settings_outlined,
+  ];
 
   @override
   void initState() {
@@ -62,21 +68,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (action == 'log_voice') ref.read(voiceLaunchProvider.notifier).request();
   }
 
-  /// Open the voice chat over whatever tab is showing. One at a time — a second tap
-  /// while it is up does nothing. Only a hands-free launch (the Action button or Siri)
-  /// starts the mic on its own; a tap on the orb opens the chat with the mic ready.
+  /// The conversation slides up over the tab you were on, as a sheet — it does not
+  /// replace the screen. One at a time. Only a hands-free launch (the Action button or
+  /// Siri) starts the mic on its own; a tap on the orb opens it ready to listen.
   Future<void> _openVoice({bool startVoice = false}) async {
     if (_voiceOpen || !mounted) return;
     _voiceOpen = true;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => LogScreen(startVoice: startVoice)),
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (_) => Padding(
+        // Leave the top of the screen showing, so it reads as a panel over the tab,
+        // not a new page.
+        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 52),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          child: LogScreen(startVoice: startVoice),
+        ),
+      ),
     );
     _voiceOpen = false;
   }
 
   @override
   Widget build(BuildContext context) {
-    // The Action button or Siri asked to log by voice: bring the voice chat up, already
+    // The Action button or Siri asked to log by voice: bring the voice sheet up, already
     // listening.
     ref.listen(voiceLaunchProvider, (_, _) => _openVoice(startVoice: true));
 
@@ -111,114 +129,123 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     return Scaffold(
+      extendBody: true,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const Positioned.fill(child: GlassBackground()),
           SafeArea(
             bottom: false,
-            child: Column(
-              children: [
-                _TopBar(
-                  index: _index,
-                  labels: _labels,
-                  onSelect: (i) => setState(() => _index = i),
-                ),
-                Expanded(
-                  // The top bar already cleared the status bar, so the tab below it
-                  // must not pad for it a second time.
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeTop: true,
-                    child: IndexedStack(index: _index, children: _tabs),
-                  ),
-                ),
-              ],
-            ),
+            child: IndexedStack(index: _index, children: _tabs),
           ),
+          // Signed-in only: the other parent's notes. In no-login mode there is nobody
+          // to message, so it stays hidden.
+          if (ref.watch(sessionProvider).value != null)
+            const Positioned(top: 0, right: 4, child: SafeArea(child: _MessageButton())),
           Positioned(
             right: 20,
-            bottom: 24,
-            // A tap opens the chat already listening: this app is for talking to.
+            bottom: 92,
             child: _VoiceOrb(onTap: () => _openVoice(startVoice: true)),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TopBar extends ConsumerWidget {
-  const _TopBar({required this.index, required this.labels, required this.onSelect});
-
-  final int index;
-  final List<String> labels;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-      child: Row(
-        children: [
-          Expanded(child: _Segments(index: index, labels: labels, onSelect: onSelect)),
-          if (ref.watch(sessionProvider).value != null) const _MessageButton(),
-        ],
+      bottomNavigationBar: _GlassTabBar(
+        index: _index,
+        labels: _labels,
+        icons: _icons,
+        onSelect: (i) => setState(() => _index = i),
       ),
     );
   }
 }
 
-/// The tab switch: pills in a track, the selected one filled. Text only, like a
-/// segmented control at the top of the screen.
-class _Segments extends StatelessWidget {
-  const _Segments({required this.index, required this.labels, required this.onSelect});
+/// A floating glass tab bar (iOS 26 style): the bar sits above the content with a margin,
+/// the content scrolls under it, and the selected tab is a filled pill.
+class _GlassTabBar extends StatelessWidget {
+  const _GlassTabBar({
+    required this.index,
+    required this.labels,
+    required this.icons,
+    required this.onSelect,
+  });
 
   final int index;
   final List<String> labels;
+  final List<IconData> icons;
   final ValueChanged<int> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: (dark ? Colors.white : Colors.black).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onSelect(i),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: i == index
-                        ? theme.colorScheme.primary
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    labels[i],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: i == index
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                      fontWeight: i == index ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottom > 0 ? bottom : 12),
+      child: GlassCard(
+        radius: 28,
+        blur: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Expanded(
+                child: _NavItem(
+                  icon: icons[i],
+                  label: labels[i],
+                  selected: i == index,
+                  onTap: () => onSelect(i),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final on = selected
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSurfaceVariant;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: on),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: on,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -244,8 +271,9 @@ class _MessageButton extends ConsumerWidget {
   }
 }
 
-/// The voice button, floating over every tab: this app is for talking to, so the way
-/// in is always there in the corner a thumb reaches.
+/// The voice button, floating over every tab above the tab bar: this app is for talking
+/// to, so the way in is always in the corner a thumb reaches. One accent colour, not a
+/// gradient blob.
 class _VoiceOrb extends StatelessWidget {
   const _VoiceOrb({required this.onTap});
 
@@ -253,28 +281,25 @@ class _VoiceOrb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 62,
-        height: 62,
-        decoration: const BoxDecoration(
+        width: 60,
+        height: 60,
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF5B8DEF), Color(0xFF9B6DE0), Color(0xFF57C6A9)],
-          ),
+          color: scheme.primary,
           boxShadow: [
             BoxShadow(
-              color: Color(0x559B6DE0),
-              blurRadius: 18,
+              color: scheme.primary.withValues(alpha: 0.45),
+              blurRadius: 20,
               spreadRadius: 1,
-              offset: Offset(0, 4),
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: const Icon(Icons.mic, color: Colors.white, size: 28),
+        child: Icon(Icons.mic, color: scheme.onPrimary, size: 28),
       ),
     );
   }
