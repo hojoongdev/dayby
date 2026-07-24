@@ -20,6 +20,7 @@ class ApiClient {
     String? caregiverId,
     AuthTokens? tokens,
     this.onTokensRefreshed,
+    this.onFamilyGone,
   }) : _dio = Dio(BaseOptions(
           baseUrl: baseUrl,
           // Fail fast when the server is unreachable (wrong address, off the network),
@@ -41,6 +42,10 @@ class ApiClient {
 
   /// Called when a 401 was recovered by refreshing, so the new pair gets persisted.
   final void Function(AuthTokens)? onTokensRefreshed;
+
+  /// Called when the server no longer knows this family -- its id is stale, e.g. the
+  /// family was deleted. The app forgets it and returns to onboarding to re-join.
+  final void Function()? onFamilyGone;
 
   void setFamilyId(String? familyId) {
     if (familyId == null || familyId.isEmpty) {
@@ -88,6 +93,16 @@ class ApiClient {
     DioException error,
     ErrorInterceptorHandler handler,
   ) async {
+    final response = error.response;
+    // The family id is stale (the family was deleted). Forget it and go back to
+    // onboarding, rather than sitting on a "could not load" that never recovers.
+    if (response?.statusCode == 404 &&
+        response?.data is Map &&
+        (response!.data as Map)['detail'] == 'Unknown family') {
+      onFamilyGone?.call();
+      return handler.next(error);
+    }
+
     final tokens = _tokens;
     final failed = error.requestOptions;
     if (error.response?.statusCode != 401 ||

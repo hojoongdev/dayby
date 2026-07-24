@@ -94,6 +94,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     caregiverId: prefs.getString(caregiverIdKey),
     tokens: ref.watch(sessionProvider).value?.tokens,
     onTokensRefreshed: (tokens) => ref.read(tokenStoreProvider).write(tokens),
+    // A stale family id (its family was deleted) sends the app back to onboarding to
+    // re-join, instead of stranding it on a screen that can never load. Clearing the id
+    // is enough -- the app re-routes to onboarding, and the dashboard unmounts with it.
+    onFamilyGone: () => ref.read(familyIdProvider.notifier).clear(),
   );
 });
 

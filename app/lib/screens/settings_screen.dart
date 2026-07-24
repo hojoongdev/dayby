@@ -180,8 +180,8 @@ class SettingsScreen extends ConsumerWidget {
       builder: (c) => AlertDialog(
         title: const Text('Reset app?'),
         content: const Text(
-          'This forgets the family and babies on this device. '
-          'Your logged data stays on the server.',
+          'This forgets the family and babies on this device. Your logged data stays on '
+          'the server, and the server address is kept -- only the family is cleared.',
         ),
         actions: [
           TextButton(
@@ -197,7 +197,18 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (ok != true) return;
     final prefs = ref.read(sharedPrefsProvider);
-    await prefs.clear();
+    // Forget the family and its data only. The server address and device settings
+    // (theme, units, languages) are kept, so re-joining does not mean re-entering the
+    // backend or re-picking every preference.
+    for (final key in [
+      familyIdKey,
+      familyNameKey,
+      inviteCodeKey,
+      selectedBabyIdKey,
+      caregiverIdKey,
+    ]) {
+      await prefs.remove(key);
+    }
     ref.read(apiClientProvider).setFamilyId(null);
     ref.invalidate(babiesProvider);
     ref.invalidate(selectedBabyIdProvider);
