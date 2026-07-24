@@ -18,6 +18,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _babyName = TextEditingController();
   final _yourName = TextEditingController();
   final _server = TextEditingController();
+  final _inviteCode = TextEditingController();
+  // null = the caregiver has not chosen yet; then "create" or "join".
+  String? _mode;
   String? _relation;
   DateTime? _birthdate;
   String? _sex;
@@ -37,6 +40,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _babyName.dispose();
     _yourName.dispose();
     _server.dispose();
+    _inviteCode.dispose();
     super.dispose();
   }
 
@@ -112,11 +116,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       );
       return;
     }
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) => _InviteCodeDialog(),
-    );
-    if (code == null || code.isEmpty || !mounted) return;
+    final code = _inviteCode.text.trim();
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the invite code your family shared.')),
+      );
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -147,9 +153,50 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (picked != null) setState(() => _birthdate = picked);
   }
 
+  Widget get _spinner => const SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+
+  Widget _back() => TextButton(
+        onPressed: _saving ? null : () => setState(() => _mode = null),
+        child: const Text('Back'),
+      );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // "You" is asked either way, so both a new family and a join can stamp who logs what.
+    // Joining only needs Dad/Mum; starting a new family also takes a display name.
+    final relationBlock = <Widget>[
+      _Label('You', theme),
+      const SizedBox(height: 8),
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'Dad', label: Text('Dad')),
+          ButtonSegment(value: 'Mum', label: Text('Mum')),
+          ButtonSegment(value: 'Other', label: Text('Other')),
+        ],
+        emptySelectionAllowed: true,
+        selected: {?_relation},
+        onSelectionChanged: (s) =>
+            setState(() => _relation = s.isEmpty ? null : s.first),
+      ),
+    ];
+    final youBlock = <Widget>[
+      ...relationBlock,
+      const SizedBox(height: 12),
+      TextField(
+        controller: _yourName,
+        textInputAction: TextInputAction.next,
+        decoration: const InputDecoration(
+          labelText: 'Your name (optional)',
+          hintText: 'Shown on what you log',
+        ),
+      ),
+    ];
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -163,8 +210,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 children: [
                   Text('Welcome to Dayby', style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 8),
-                  Text('Set up your family to start logging.',
-                      style: theme.textTheme.bodyMedium),
+                  Text(
+                    switch (_mode) {
+                      'create' => 'Set up your family to start logging.',
+                      'join' => 'Join a family with the code they shared.',
+                      _ => 'Start a new family, or join one you were invited to.',
+                    },
+                    style: theme.textTheme.bodyMedium,
+                  ),
                   const SizedBox(height: 24),
                   TextField(
                     controller: _server,
@@ -176,85 +229,82 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       helperText: 'Your Dayby server — run it yourself, anywhere.',
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _familyName,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Family name',
-                      hintText: 'The Kim family',
-                    ),
-                  ),
                   const SizedBox(height: 20),
-                  _Label('You', theme),
-                  const SizedBox(height: 8),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'Dad', label: Text('Dad')),
-                      ButtonSegment(value: 'Mum', label: Text('Mum')),
-                      ButtonSegment(value: 'Other', label: Text('Other')),
-                    ],
-                    emptySelectionAllowed: true,
-                    selected: {?_relation},
-                    onSelectionChanged: (s) =>
-                        setState(() => _relation = s.isEmpty ? null : s.first),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _yourName,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Your name (optional)',
-                      hintText: 'Shown on what you log',
+                  if (_mode == null) ...[
+                    FilledButton.icon(
+                      onPressed: () => setState(() => _mode = 'create'),
+                      icon: const Icon(Icons.add_home_outlined),
+                      label: const Text('Start a new family'),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  _Label('Baby', theme),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _babyName,
-                    decoration: const InputDecoration(labelText: "Baby's name"),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickBirthdate,
-                          icon: const Icon(Icons.cake_outlined),
-                          label: Text(_birthdate == null
-                              ? 'Birthday'
-                              : formatDate(_birthdate!)),
-                        ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => setState(() => _mode = 'join'),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text('Join with an invite code'),
+                    ),
+                  ],
+                  if (_mode == 'create') ...[
+                    TextField(
+                      controller: _familyName,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Family name',
+                        hintText: 'The Kim family',
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'female', label: Text('Girl')),
-                      ButtonSegment(value: 'male', label: Text('Boy')),
-                    ],
-                    emptySelectionAllowed: true,
-                    selected: {?_sex},
-                    onSelectionChanged: (s) =>
-                        setState(() => _sex = s.isEmpty ? null : s.first),
-                  ),
-                  const SizedBox(height: 28),
-                  FilledButton(
-                    onPressed: _saving ? null : _submit,
-                    child: _saving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Get started'),
-                  ),
-                  TextButton(
-                    onPressed: _saving ? null : _join,
-                    child: const Text('Join a family with an invite code'),
-                  ),
+                    ),
+                    const SizedBox(height: 20),
+                    ...youBlock,
+                    const SizedBox(height: 20),
+                    _Label('Baby', theme),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _babyName,
+                      decoration: const InputDecoration(labelText: "Baby's name"),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _pickBirthdate,
+                      icon: const Icon(Icons.cake_outlined),
+                      label: Text(
+                          _birthdate == null ? 'Birthday' : formatDate(_birthdate!)),
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'female', label: Text('Girl')),
+                        ButtonSegment(value: 'male', label: Text('Boy')),
+                      ],
+                      emptySelectionAllowed: true,
+                      selected: {?_sex},
+                      onSelectionChanged: (s) =>
+                          setState(() => _sex = s.isEmpty ? null : s.first),
+                    ),
+                    const SizedBox(height: 28),
+                    FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      child: _saving ? _spinner : const Text('Get started'),
+                    ),
+                    _back(),
+                  ],
+                  if (_mode == 'join') ...[
+                    ...relationBlock,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _inviteCode,
+                      autocorrect: false,
+                      textCapitalization: TextCapitalization.none,
+                      decoration: const InputDecoration(
+                        labelText: 'Invite code',
+                        hintText: 'The 6-character code they shared',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: _saving ? null : _join,
+                      child: _saving ? _spinner : const Text('Join family'),
+                    ),
+                    _back(),
+                  ],
                 ],
               ),
             ),
@@ -280,28 +330,3 @@ class _Label extends StatelessWidget {
       );
 }
 
-class _InviteCodeDialog extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final code = TextEditingController();
-    return AlertDialog(
-      title: const Text('Join a family'),
-      content: TextField(
-        controller: code,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Invite code'),
-        onSubmitted: (value) => Navigator.pop(context, value.trim()),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, code.text.trim()),
-          child: const Text('Join'),
-        ),
-      ],
-    );
-  }
-}

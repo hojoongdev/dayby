@@ -86,7 +86,8 @@ void main() {
     expect(store.tokens?.refresh, 'refresh-1');
     // Signed in, but with no family: that is the next screen, not an error.
     expect(find.text('Welcome to Dayby'), findsOneWidget);
-    expect(find.text('Join a family with an invite code'), findsOneWidget);
+    expect(find.text('Join with an invite code'), findsOneWidget);
+    expect(find.text('Start a new family'), findsOneWidget);
   });
 
   testWidgets("Google's token is what gets handed to the server", (tester) async {
