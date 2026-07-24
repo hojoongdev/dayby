@@ -143,10 +143,20 @@ class _Splash extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 40),
-                const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                // Fade the spinner in so it does not pop over the native launch screen,
+                // which shows the wordmark alone. Muted, to sit quietly on the gradient.
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 500),
+                  builder: (context, t, child) => Opacity(opacity: t, child: child),
+                  child: SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
                 ),
               ],
             ),

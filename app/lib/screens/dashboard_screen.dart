@@ -21,15 +21,53 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final active = ref.watch(activeBabyProvider);
+    final babiesLoading = ref.watch(babiesProvider).isLoading;
     // No app bar of its own: the shell owns the top bar and the tab switch.
     return Stack(
       children: [
         const Positioned.fill(child: GlassBackground()),
         SafeArea(
-          child: active == null
-              ? const Center(child: Text('Add a baby in Settings to begin.'))
-              : _Board(baby: active),
+          // A null baby while the list is still loading is not "no baby yet". Show a
+          // skeleton until the list is back, so the add-a-baby line never flashes over
+          // an account that has one.
+          child: switch ((active, babiesLoading)) {
+            (final baby?, _) => _Board(baby: baby),
+            (null, true) => const _DashboardSkeleton(),
+            (null, false) =>
+              const Center(child: Text('Add a baby in Settings to begin.')),
+          },
         ),
+      ],
+    );
+  }
+}
+
+/// Content-shaped placeholders for the cold-start moment before the baby and the
+/// timeline arrive. No spinner: the dashboard has a shape, so hold that shape.
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget box(double h, {double w = double.infinity}) => Container(
+          height: h,
+          width: w,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+          ),
+        );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+      children: [
+        box(26, w: 160),
+        const SizedBox(height: 8),
+        box(16, w: 110),
+        const SizedBox(height: 24),
+        for (var i = 0; i < 3; i++) ...[
+          box(96),
+          const SizedBox(height: 14),
+        ],
       ],
     );
   }
