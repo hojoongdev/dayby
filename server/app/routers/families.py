@@ -93,8 +93,11 @@ async def join_family(
     if family is None:
         raise HTTPException(status_code=404, detail="No family with that invite code")
 
+    # A code that expires is a security measure for a public deployment. With no login it
+    # is also the only way back to the family's data, so there it never expires -- losing
+    # it would strand the records for good.
     expires = family.get("invite_expires_at")
-    if expires is not None and as_utc(expires) < now():
+    if settings.auth_enabled and expires is not None and as_utc(expires) < now():
         raise HTTPException(
             status_code=410, detail="This invite code has expired. Ask for a new one."
         )
