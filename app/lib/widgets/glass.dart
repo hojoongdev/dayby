@@ -2,8 +2,9 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-/// A frosted-glass surface (iOS style): a blurred, translucent panel with a
-/// hairline highlight border. Sits over [GlassBackground] so the blur reads.
+/// A frosted-glass surface (iOS style): a translucent panel with a hairline highlight
+/// border. Over scrolling content the blur reads as glass; over the flat background it
+/// reads as a panel lifted a little off the page.
 class GlassCard extends StatelessWidget {
   const GlassCard({
     super.key,
@@ -24,21 +25,20 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final card = DecoratedBox(
-      // Frost alone does not lift a panel off the page; the shadow is what says
-      // the glass is above the background rather than painted onto it. Two of
-      // them: a close one for the edge, a wide soft one for the lift.
+      // The shadow is what lifts the glass off the page. Two: a close one for the
+      // edge, a wide soft one for the lift.
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.18 : 0.04),
-            blurRadius: 3,
+            color: Colors.black.withValues(alpha: dark ? 0.35 : 0.05),
+            blurRadius: 4,
             offset: const Offset(0, 1),
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.22 : 0.05),
-            blurRadius: 26,
-            offset: const Offset(0, 10),
+            color: Colors.black.withValues(alpha: dark ? 0.30 : 0.06),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -49,10 +49,12 @@ class GlassCard extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: dark ? 0.10 : 0.55),
+              // On black the fill is a faint white lift; on white a soft milky panel.
+              color: Colors.white.withValues(alpha: dark ? 0.07 : 0.62),
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
-                color: Colors.white.withValues(alpha: dark ? 0.16 : 0.65),
+                color: Colors.white.withValues(alpha: dark ? 0.10 : 0.70),
+                width: 0.6,
               ),
             ),
             child: child,
@@ -64,83 +66,24 @@ class GlassCard extends StatelessWidget {
   }
 }
 
-/// What the glass floats on. The gradient alone is too smooth for frost to show
-/// against — the blur needs something to smear — so a few soft colour blooms sit
-/// under it, out of focus, the way a wallpaper does behind iOS glass.
+/// What the glass floats on. No wallpaper blooms — those read as AI stock art. Dark is
+/// true black for OLED, with a whisper of lift at the very top so it is not a dead void;
+/// light is a clean, cool off-white. Both are flat and quiet, so the content is the thing.
 class GlassBackground extends StatelessWidget {
   const GlassBackground({super.key});
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: dark
-                    ? const [Color(0xFF1B2430), Color(0xFF2A3442), Color(0xFF20291F)]
-                    : const [Color(0xFFDCE7F5), Color(0xFFEDE5F4), Color(0xFFE4F1EA)],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: -90,
-          left: -70,
-          child: _Bloom(
-            const Color(0xFF7BA7DD),
-            size: 320,
-            opacity: dark ? 0.22 : 0.38,
-          ),
-        ),
-        Positioned(
-          top: 220,
-          right: -110,
-          child: _Bloom(
-            const Color(0xFFB79FDD),
-            size: 300,
-            opacity: dark ? 0.20 : 0.32,
-          ),
-        ),
-        Positioned(
-          bottom: -80,
-          left: 20,
-          child: _Bloom(
-            const Color(0xFF86CDB2),
-            size: 340,
-            opacity: dark ? 0.18 : 0.30,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Bloom extends StatelessWidget {
-  const _Bloom(this.color, {required this.size, required this.opacity});
-
-  final Color color;
-  final double size;
-  final double opacity;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              color.withValues(alpha: opacity),
-              color.withValues(alpha: 0),
-            ],
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: dark
+              ? const [Color(0xFF0C0F14), Color(0xFF000000)]
+              : const [Color(0xFFF5F7FB), Color(0xFFEBEEF3)],
+          stops: const [0.0, 0.55],
         ),
       ),
     );

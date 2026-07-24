@@ -41,15 +41,30 @@ class DaybyApp extends ConsumerWidget {
   }
 }
 
-/// The gradient, the glass and the charts each carry their own dark values already.
+/// The background, the glass and the charts each carry their own dark values already.
 /// This is only the Material half: the colours everything else is drawn from.
-ThemeData _theme(Brightness brightness) => ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6C8EBF),
-        brightness: brightness,
-      ),
-      useMaterial3: true,
-    );
+///
+/// Dark is true black, for OLED: the background paints #000 and the scaffold matches,
+/// so unlit pixels stay off. The glass panels are the only thing that lifts.
+ThemeData _theme(Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final scheme = ColorScheme.fromSeed(
+    seedColor: const Color(0xFF6C8EBF),
+    brightness: brightness,
+  );
+  return ThemeData(
+    colorScheme: scheme,
+    scaffoldBackgroundColor: dark ? Colors.black : const Color(0xFFF4F6FA),
+    useMaterial3: true,
+    // Bars sit on the glass, not on a Material tint. Keep them clear so nothing
+    // opaque shows through the frost.
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+    ),
+  );
+}
 
 /// Four questions, in order: is the phone allowed to show this at all, does this
 /// server want a sign-in, are we signed in, and do we have a family yet.
