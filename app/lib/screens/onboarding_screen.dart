@@ -225,8 +225,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     autocorrect: false,
                     decoration: const InputDecoration(
                       labelText: 'Server address',
-                      hintText: 'http://192.168.0.10:8000',
-                      helperText: 'Your Dayby server — run it yourself, anywhere.',
+                      hintText: '192.168.0.10',
+                      helperText: 'Your server — the IP is enough (port 8000 assumed).',
                     ),
                   ),
                   const SizedBox(height: 20),

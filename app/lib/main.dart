@@ -239,7 +239,8 @@ class _ServerUnreachableState extends ConsumerState<_ServerUnreachable> {
                         autocorrect: false,
                         decoration: const InputDecoration(
                           labelText: 'Server address',
-                          hintText: 'http://192.168.0.10:8000',
+                          hintText: '192.168.0.10',
+                          helperText: 'Just the IP is enough — port 8000 is assumed.',
                         ),
                       ),
                       const SizedBox(height: 16),

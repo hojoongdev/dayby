@@ -46,6 +46,22 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => const SecureTokenStore(
 /// Which backend the app talks to. Editable at runtime so anyone can run their own
 /// server (locally, on AWS, anywhere) and point the app at it. Defaults to whatever
 /// was baked in at build time. Changing it rebuilds every client that reads it.
+/// Accepts a full URL or just an address. A bare host/IP (no scheme typed) is the common
+/// LAN case, so it fills in http and the default port -- typing "192.168.0.10" is enough,
+/// which is all that usually changes. A typed scheme or port is always respected.
+String normalizeServerUrl(String input) {
+  var s = input.trim().replaceAll(RegExp(r'/+$'), '');
+  if (s.isEmpty) return s;
+  final hadScheme = s.contains('://');
+  if (!hadScheme) s = 'http://$s';
+  final uri = Uri.tryParse(s);
+  if (uri == null || uri.host.isEmpty) return input.trim();
+  if (!hadScheme && !uri.hasPort) {
+    return uri.replace(port: 8000).toString().replaceAll(RegExp(r'/+$'), '');
+  }
+  return s;
+}
+
 class ServerUrlNotifier extends Notifier<String> {
   @override
   String build() {
@@ -54,7 +70,7 @@ class ServerUrlNotifier extends Notifier<String> {
   }
 
   Future<void> set(String url) async {
-    final clean = url.trim().replaceAll(RegExp(r'/+$'), '');
+    final clean = normalizeServerUrl(url);
     await ref.read(sharedPrefsProvider).setString(serverUrlKey, clean);
     state = clean;
   }
