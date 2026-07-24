@@ -41,16 +41,24 @@ class _AssistantCardState extends ConsumerState<AssistantCard> {
     if (mounted) setState(() => _speaking = false);
   }
 
+  // The tips last shown, kept so a refresh does not blank the card back to a spinner.
+  AssistantTips? _last;
+
   @override
   Widget build(BuildContext context) {
     final tips = ref.watch(tipsProvider(widget.babyId));
-    return tips.when(
-      loading: () => const _Shell(child: _Waiting()),
-      // Tips are a bonus surface: if the model or the network is having a bad day,
-      // the card just isn't there.
-      error: (_, _) => const SizedBox.shrink(),
-      data: (t) => t.tips.isEmpty ? const SizedBox.shrink() : _card(context, t),
-    );
+    final current = tips.value;
+    if (current != null) _last = current;
+    // Stale-while-revalidate: keep the current tips on screen while the next set loads,
+    // so the card does not flash a spinner every time the timeline changes. Only the very
+    // first load, with nothing cached, shows the waiting state.
+    final data = current ?? _last;
+    if (data == null) {
+      return tips.hasError
+          ? const SizedBox.shrink()
+          : const _Shell(child: _Waiting());
+    }
+    return data.tips.isEmpty ? const SizedBox.shrink() : _card(context, data);
   }
 
   Widget _card(BuildContext context, AssistantTips tips) {

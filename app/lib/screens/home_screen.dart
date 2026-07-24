@@ -23,6 +23,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with WidgetsBindingObserver {
   int _index = 0;
   bool _voiceOpen = false;
+  bool _prewarmed = false;
 
   static const _tabs = [
     DashboardScreen(),
@@ -167,6 +168,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               [for (final s in tips.scheduled) (at: s.at, text: s.text)],
             );
       });
+      // Warm the keepsake in the background, once, so "Your story" opens without a wait.
+      if (!_prewarmed) {
+        _prewarmed = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(wrappedProvider(baby.id));
+        });
+      }
     }
 
     return Scaffold(
