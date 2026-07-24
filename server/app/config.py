@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Providers (swappable; "mock" needs no API keys)
     llm_provider: str = "mock"
     stt_provider: str = "mock"
+    # Text-to-speech. "mock" returns no audio and the app speaks on-device; "gemini"
+    # synthesises natural, language-aware speech server-side.
+    tts_provider: str = "mock"
+    tts_model: str = "gemini-2.5-flash-preview-tts"
+    tts_voice: str = "Kore"
 
     # Gemini (used when llm_provider == "gemini")
     gemini_api_key: str = ""

@@ -34,6 +34,9 @@ services:
       DB_NAME: ${DB_NAME:-dayby}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       STT_PROVIDER: ${STT_PROVIDER:-mock}
+      TTS_PROVIDER: ${TTS_PROVIDER:-mock}
+      TTS_MODEL: ${TTS_MODEL:-gemini-2.5-flash-preview-tts}
+      TTS_VOICE: ${TTS_VOICE:-Kore}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-false}

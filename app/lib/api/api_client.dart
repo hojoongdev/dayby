@@ -401,6 +401,26 @@ class ApiClient {
     return Uint8List.fromList(res.data!);
   }
 
+  /// The reply as spoken audio (WAV), or null when the server has no voice configured --
+  /// then the app speaks it on-device. Never throws: a missing voice is not an error.
+  Future<Uint8List?> tts(String text, {String? lang}) async {
+    try {
+      final res = await _dio.post<List<int>>(
+        '/tts',
+        data: {'text': text, 'lang': ?lang},
+        options: Options(
+          responseType: ResponseType.bytes,
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
+      final data = res.data;
+      if (res.statusCode == 204 || data == null || data.isEmpty) return null;
+      return Uint8List.fromList(data);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// What the assistant would say right now, unprompted.
   Future<AssistantTips> tips({required String babyId, String? lang}) async {
     final res = await _dio.get('/assistant/tips', queryParameters: {

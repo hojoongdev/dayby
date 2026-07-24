@@ -73,7 +73,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   late final VoiceRecorder _voice = ref.read(voiceRecorderProvider);
-  final Tts _tts = Tts();
+  late final Tts _tts =
+      Tts(serverVoice: (t, l) => ref.read(apiClientProvider).tts(t, lang: l));
   StreamSubscription<double>? _levels;
   bool _voiceAvailable = false;
   bool _listening = false;

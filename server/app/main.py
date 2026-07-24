@@ -20,6 +20,7 @@ from .routers import (
     reminders,
     routines,
     stats,
+    tts,
     wrapped,
 )
 
@@ -71,6 +72,7 @@ app.include_router(wrapped.router)
 app.include_router(live.router)
 app.include_router(routines.router)
 app.include_router(reminders.router)
+app.include_router(tts.router)
 app.include_router(insights.router)
 app.include_router(messages.router)
 

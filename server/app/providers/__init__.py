@@ -4,6 +4,8 @@ from .llm.base import LLMProvider
 from .llm.mock import MockLLMProvider
 from .stt.base import STTProvider
 from .stt.mock import MockSTTProvider
+from .tts.base import TTSProvider
+from .tts.mock import MockTTSProvider
 
 
 def get_llm_provider() -> LLMProvider:
@@ -32,3 +34,14 @@ def get_stt_provider() -> STTProvider:
 
         return GeminiSTTProvider()
     raise ValueError(f"Unknown STT_PROVIDER: {name!r}")
+
+
+def get_tts_provider() -> TTSProvider:
+    name = settings.tts_provider
+    if name == "mock":
+        return MockTTSProvider()
+    if name == "gemini":
+        from .tts.gemini import GeminiTTSProvider
+
+        return GeminiTTSProvider()
+    raise ValueError(f"Unknown TTS_PROVIDER: {name!r}")

@@ -21,7 +21,8 @@ class WrappedScreen extends ConsumerStatefulWidget {
 }
 
 class _WrappedScreenState extends ConsumerState<WrappedScreen> {
-  final Tts _tts = Tts();
+  late final Tts _tts =
+      Tts(serverVoice: (t, l) => ref.read(apiClientProvider).tts(t, lang: l));
   bool _speaking = false;
 
   @override
