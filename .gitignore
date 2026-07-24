@@ -32,3 +32,5 @@ CLAUDE.md
 
 # Local backlog of what the user asked for. Not part of the public repo.
 BACKLOG.md
+docker-compose.override.yml
+dayby-architecture.html
