@@ -167,7 +167,7 @@ class _Charts extends ConsumerWidget {
         ref.invalidate(statsRangeProvider);
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         children: [
           if (stats.rhythm.isNotEmpty)
             _Card(

@@ -275,6 +275,8 @@ class _EventList extends ConsumerWidget {
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
+      // Clear the floating glass tab bar at the bottom.
+      padding: const EdgeInsets.only(bottom: 100),
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final row = rows[i];

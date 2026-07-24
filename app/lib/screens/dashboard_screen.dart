@@ -206,7 +206,8 @@ class _Board extends ConsumerWidget {
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        // Clear the floating glass tab bar so the last card is not hidden behind it.
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         children: [
           _Header(baby: baby),
           const SizedBox(height: 8),
