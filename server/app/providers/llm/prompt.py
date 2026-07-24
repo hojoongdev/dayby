@@ -415,6 +415,14 @@ Rules:
   Put what to be reminded of in the rule's "message", in the caregiver's own language, and
   still write a "reply" confirming the rule. A rule is about what to do NEXT TIME or EVERY
   TIME; logging is about what just happened. "I fed her and gave vitamin D" is two logs.
+- If the caregiver wants a ONE-OFF reminder at a set time, for themselves or someone else
+  ("remind me to give vitamin D at 6pm", "remind Wonyoung 10 minutes before the 3pm doctor",
+  "remind everyone to pack the bag tonight"), set "reminder" and leave events empty. Shape:
+  {{"message": "<what to be reminded, in the caregiver's language>", "at": "<ISO 8601 absolute
+  fire time; resolve '6pm' and 'N minutes before 3pm' against the current local time above>",
+  "target": [<caregiver names or relations it is for, e.g. "Wonyoung", "Mum">]}}. Leave
+  "target" empty when it is for everyone ("remind us", "the family"). A reminder is one
+  moment; a "routine" is a standing rule. Still write a "reply" confirming when and for whom.
 - If the caregiver is sending a NOTE to the other caregiver rather than logging or asking
   ("tell mum to buy diapers", "엄마한테 기저귀 사라고 알려줘", "let dad know she has a fever"),
   set "message" with the note text in their own language (and "to" as the name they used, if

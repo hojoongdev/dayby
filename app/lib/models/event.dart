@@ -144,6 +144,22 @@ class RoutineSpec {
       );
 }
 
+class ReminderSpec {
+  const ReminderSpec({required this.message, required this.at, this.target = const []});
+
+  final String message;
+  final DateTime at;
+
+  /// Caregiver names or relations the reminder is for; empty means everyone.
+  final List<String> target;
+
+  factory ReminderSpec.fromJson(Map<String, dynamic> json) => ReminderSpec(
+        message: json['message'] as String,
+        at: DateTime.parse(json['at'] as String),
+        target: (json['target'] as List? ?? const []).cast<String>(),
+      );
+}
+
 class StructuredResult {
   const StructuredResult({
     this.action = 'create',
@@ -154,6 +170,7 @@ class StructuredResult {
     this.reply,
     this.settings,
     this.routine,
+    this.reminder,
     this.message,
     this.lang = 'ko',
   });
@@ -178,6 +195,9 @@ class StructuredResult {
   /// A reminder rule the caregiver set up by voice, for the app to confirm and save.
   final RoutineSpec? routine;
 
+  /// A one-off reminder at a set time, possibly for the other caregiver.
+  final ReminderSpec? reminder;
+
   /// A note to the other caregiver, drafted by voice, for the app to confirm and send.
   final MessageDraft? message;
   final String lang;
@@ -201,6 +221,9 @@ class StructuredResult {
         routine: json['routine'] == null
             ? null
             : RoutineSpec.fromJson(json['routine'] as Map<String, dynamic>),
+        reminder: json['reminder'] == null
+            ? null
+            : ReminderSpec.fromJson(json['reminder'] as Map<String, dynamic>),
         message: json['message'] == null
             ? null
             : MessageDraft.fromJson(json['message'] as Map<String, dynamic>),

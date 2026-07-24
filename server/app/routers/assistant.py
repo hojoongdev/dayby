@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from ..care import OVERDUE_AFTER
 from ..context import build_llm_context
 from ..db import get_db
-from ..deps import get_current_family, require_baby
+from ..deps import get_caller, get_current_family, require_baby
 from ..models.events import (
     AssistantTips,
     CareSignal,
@@ -164,10 +164,28 @@ async def upcoming_events(
     return out
 
 
+async def one_off_reminders(
+    family: dict, caregiver_id: Optional[str], now_dt: datetime
+) -> list[ScheduledReminder]:
+    """The still-future one-off reminders this caregiver should be handed. A reminder with
+    no target is for everyone; one with a target list only goes to those caregivers."""
+    out: list[ScheduledReminder] = []
+    cursor = get_db().reminders.find(
+        {"family_id": family["_id"], "at": {"$gte": now_dt}}
+    )
+    async for r in cursor:
+        targets = r.get("target_caregivers") or []
+        if targets and caregiver_id not in targets:
+            continue
+        out.append(ScheduledReminder(at=as_utc(r["at"]), text=r["message"]))
+    return out
+
+
 @router.get("/tips", response_model=AssistantTips)
 async def tips(
     baby_id: str,
     family: dict = Depends(get_current_family),
+    caller: Optional[dict] = Depends(get_caller),
     lang: Optional[str] = None,
     at: Optional[datetime] = Query(None, alias="now"),
 ) -> AssistantTips:
@@ -191,6 +209,9 @@ async def tips(
     if remind_at and reminder:
         scheduled.append(ScheduledReminder(at=remind_at, text=reminder))
     scheduled.extend(await routine_reminders(family, baby_id, signals, now_dt))
+    scheduled.extend(
+        await one_off_reminders(family, caller["_id"] if caller else None, now_dt)
+    )
     scheduled.sort(key=lambda r: r.at)
     scheduled = scheduled[:MAX_SCHEDULED]
 

@@ -68,6 +68,40 @@ class RoutineSpec(BaseModel):
     time_local: Optional[str] = None  # "HH:MM"
 
 
+class ReminderSpec(BaseModel):
+    """A one-off reminder the caregiver asked for out loud, for the app to confirm and set.
+
+    "Remind me to give vitamin D at 6pm", "remind everyone 10 minutes before the 3pm
+    doctor". Distinct from a RoutineSpec, which is a standing rule. `at` is the absolute
+    fire time -- the model resolves "6pm" and "10 minutes before 3pm" against the current
+    time. `target` names the caregivers it is for (by name or relation); empty means
+    everyone in the family.
+    """
+
+    message: str
+    at: datetime
+    target: list[str] = Field(default_factory=list)
+
+
+class ReminderCreate(BaseModel):
+    """A confirmed one-off reminder to persist. `target_caregivers` are caregiver ids the
+    reminder is for; empty means everyone in the family."""
+
+    message: str
+    at: datetime
+    baby_id: Optional[str] = None
+    target_caregivers: list[str] = Field(default_factory=list)
+
+
+class ReminderOut(BaseModel):
+    id: str
+    message: str
+    at: datetime
+    target_caregivers: list[str] = Field(default_factory=list)
+    created_by: Optional[str] = None
+    created_at: datetime
+
+
 class StructuredResult(BaseModel):
     """What the LLM returns for a single utterance."""
 
@@ -86,6 +120,9 @@ class StructuredResult(BaseModel):
     # A reminder rule requested by voice. When present, the app offers to save it as a
     # routine instead of logging an event.
     routine: Optional[RoutineSpec] = None
+    # A one-off reminder at a set time, possibly for the other caregiver. The app offers to
+    # set it; each targeted phone raises it as a local notification.
+    reminder: Optional[ReminderSpec] = None
     # A note to the other caregiver ("tell mum to buy diapers"). The app offers to send it.
     message: Optional[MessageDraft] = None
     lang: str = "ko"

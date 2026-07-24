@@ -186,6 +186,22 @@ class ApiClient {
     return Routine.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// A one-off reminder at a set time. `targetCaregivers` are the ids it is for; empty
+  /// means everyone. Each targeted phone picks it up from its tips and raises it locally.
+  Future<void> createReminder({
+    required String message,
+    required DateTime at,
+    List<String> targetCaregivers = const [],
+    String? babyId,
+  }) async {
+    await _dio.post('/reminders', data: {
+      'message': message,
+      'at': at.toUtc().toIso8601String(),
+      'target_caregivers': targetCaregivers,
+      'baby_id': ?babyId,
+    });
+  }
+
   Future<Routine> setRoutineActive(String id, bool active) async {
     final res = await _dio.patch('/routines/$id', data: {'active': active});
     return Routine.fromJson(res.data as Map<String, dynamic>);

@@ -362,6 +362,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       } else if (result.routine != null) {
         // A reminder rule to set up, not an event to log. Ask before saving it.
         _pending = result;
+      } else if (result.reminder != null) {
+        // A one-off reminder at a time, maybe for the other parent. Ask before setting it.
+        _pending = result;
       } else if (result.action == 'create' && result.events.isNotEmpty) {
         _pending = result;
       } else if ((result.isUpdate || result.isDelete) && result.target != null) {
@@ -641,6 +644,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           _messageCard(_pending!.message!)
         else if (_pending?.routine != null)
           _routineCard(_pending!.routine!)
+        else if (_pending?.reminder != null)
+          _reminderCard(_pending!.reminder!)
         else if (_pending != null && active != null)
           switch (_pending!.action) {
             'update' => _changeCard(_pending!),
@@ -807,6 +812,50 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         ],
       ),
     );
+  }
+
+  Widget _reminderCard(ReminderSpec r) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10, right: 24),
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: _ReminderCard(
+          spec: r,
+          saving: _saving,
+          onCancel: () => setState(() => _pending = null),
+          onSet: (targetIds) => _saveReminder(r, targetIds),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveReminder(ReminderSpec r, List<String> targetIds) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).createReminder(
+            message: r.message,
+            at: r.at,
+            targetCaregivers: targetIds,
+          );
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _pending = null;
+        _history.add(_Msg(
+          fromUser: false,
+          text: r.message,
+          subtitle: 'Reminder set',
+          saved: true,
+        ));
+      });
+      _scrollToBottom();
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(err))));
+    }
   }
 
   Widget _changeCard(StructuredResult result) {
@@ -1163,6 +1212,116 @@ class _LogScreenState extends ConsumerState<LogScreen> {
                 child: Icon(Icons.close, size: 13, color: Colors.white),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The confirm card for a one-off reminder: what, when, and which caregivers get it.
+/// The caregivers come pre-ticked from what the caregiver said ("remind Wonyoung"),
+/// or everyone when they named no one, and are adjustable before it is set.
+class _ReminderCard extends ConsumerStatefulWidget {
+  const _ReminderCard({
+    required this.spec,
+    required this.saving,
+    required this.onCancel,
+    required this.onSet,
+  });
+
+  final ReminderSpec spec;
+  final bool saving;
+  final VoidCallback onCancel;
+  final void Function(List<String> targetIds) onSet;
+
+  @override
+  ConsumerState<_ReminderCard> createState() => _ReminderCardState();
+}
+
+class _ReminderCardState extends ConsumerState<_ReminderCard> {
+  Set<String>? _selected;
+
+  Set<String> _initial(Map<String, String> caregivers) {
+    final wanted = widget.spec.target.map((t) => t.toLowerCase()).toList();
+    if (wanted.isEmpty) return caregivers.keys.toSet();
+    final sel = <String>{};
+    for (final e in caregivers.entries) {
+      final name = e.value.toLowerCase();
+      if (wanted.any((t) => name.contains(t) || t.contains(name))) sel.add(e.key);
+    }
+    return sel.isEmpty ? caregivers.keys.toSet() : sel;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final caregivers =
+        ref.watch(caregiversProvider).value ?? const <String, String>{};
+    _selected ??= _initial(caregivers);
+    final sel = _selected!;
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.notifications_active_outlined,
+                  size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text('Set this reminder?', style: theme.textTheme.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(widget.spec.message, style: theme.textTheme.titleMedium),
+          const SizedBox(height: 2),
+          Text(formatTime(widget.spec.at),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          if (caregivers.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Remind',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            for (final e in caregivers.entries)
+              InkWell(
+                onTap: () => setState(
+                    () => sel.contains(e.key) ? sel.remove(e.key) : sel.add(e.key)),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      visualDensity: VisualDensity.compact,
+                      value: sel.contains(e.key),
+                      onChanged: (v) => setState(() =>
+                          (v ?? false) ? sel.add(e.key) : sel.remove(e.key)),
+                    ),
+                    Text(e.value),
+                  ],
+                ),
+              ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton(
+                onPressed: widget.saving ? null : widget.onCancel,
+                child: const Text('Cancel'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: widget.saving || (caregivers.isNotEmpty && sel.isEmpty)
+                    ? null
+                    : () => widget.onSet(sel.toList()),
+                child: widget.saving
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Set reminder'),
+              ),
+            ],
           ),
         ],
       ),
