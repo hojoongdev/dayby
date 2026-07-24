@@ -344,24 +344,15 @@ class _Header extends StatelessWidget {
               children: [
                 Text(baby.name, style: theme.textTheme.headlineSmall),
                 if (baby.birthdate != null)
-                  Text(formatAge(baby.birthdate!),
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    '${formatAge(baby.birthdate!)} '
+                    '(D+${DateTime.now().difference(baby.birthdate!).inDays})',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
               ],
             ),
           ),
-          if (baby.birthdate != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text('D+${DateTime.now().difference(baby.birthdate!).inDays}',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
         ],
       ),
     );
