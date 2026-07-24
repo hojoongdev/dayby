@@ -95,11 +95,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           behavior: HitTestBehavior.opaque,
           child: Stack(
             children: [
-              // Blur and dim the tab behind, so the panel reads as an overlay.
+              // A light blur and dim behind, just enough to lift the panel off the tab.
               Positioned.fill(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: const ColoredBox(color: Color(0x33000000)),
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: const ColoredBox(color: Color(0x1F000000)),
                 ),
               ),
               Positioned(
