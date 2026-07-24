@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -388,12 +389,19 @@ final statsProvider = FutureProvider.family<Stats, String>(
 
 /// A tick every 30s, so "N ago" text and the fill-toward-next bars on the dashboard
 /// keep moving without a save or a pull-to-refresh. Watching it is enough to rebuild.
-final dashboardClockProvider = StreamProvider<DateTime>(
-  (ref) => Stream<DateTime>.periodic(
+/// The timer is cancelled on dispose so nothing lingers (a test would flag it).
+final dashboardClockProvider = StreamProvider<DateTime>((ref) {
+  final controller = StreamController<DateTime>();
+  final timer = Timer.periodic(
     const Duration(seconds: 30),
-    (_) => DateTime.now(),
-  ),
-);
+    (_) => controller.add(DateTime.now()),
+  );
+  ref.onDispose(() {
+    timer.cancel();
+    controller.close();
+  });
+  return controller.stream;
+});
 
 /// Next-up predictions and the week's trends. Invalidated on every save: logging a
 /// feed moves the next-feed estimate.
@@ -441,10 +449,10 @@ final spokenLanguagesProvider =
 
 /// The language the assistant speaks back in, for the surfaces where nobody has said
 /// anything for it to detect: the tips on Home and the wrapped story. What the caregiver
-/// *says* is worked out from the words themselves. Defaults to Korean.
+/// *says* is worked out from the words themselves. Defaults to English.
 class AssistantLangNotifier extends Notifier<String> {
   @override
-  String build() => ref.watch(sharedPrefsProvider).getString(assistantLangKey) ?? 'ko';
+  String build() => ref.watch(sharedPrefsProvider).getString(assistantLangKey) ?? 'en';
 
   Future<void> set(String lang) async {
     await ref.read(sharedPrefsProvider).setString(assistantLangKey, lang);

@@ -3,6 +3,9 @@ import 'package:dayby/lang.dart';
 import 'package:dayby/main.dart';
 import 'package:dayby/models/event.dart';
 import 'package:dayby/models/family.dart';
+import 'package:dayby/models/insights.dart';
+import 'package:dayby/models/stats.dart';
+import 'package:dayby/models/tip.dart';
 import 'package:dayby/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +23,21 @@ class _FakeApiClient extends ApiClient {
     String? type,
     int limit = 100,
   }) async => const [];
+
+  // The dashboard sits behind Settings in the tab stack and pulls these on build.
+  // Changing the spoken language re-invalidates them, so a fake that fell through to
+  // real HTTP would leave a connection timer pending and fail the test.
+  @override
+  Future<Insights> insights({required String babyId, String? lang}) async =>
+      const Insights();
+
+  @override
+  Future<AssistantTips> tips({required String babyId, String? lang}) async =>
+      const AssistantTips();
+
+  @override
+  Future<Stats> stats({required String babyId, int days = 14}) async =>
+      const Stats();
 }
 
 Future<ProviderContainer> _openSettings(WidgetTester tester) async {
@@ -29,8 +47,12 @@ Future<ProviderContainer> _openSettings(WidgetTester tester) async {
     overrides: [
       sharedPrefsProvider.overrideWithValue(prefs),
       apiClientProvider.overrideWithValue(_FakeApiClient()),
+      // The dashboard runs a 30s clock; a real timer left pending fails this test's
+      // manual container. It has no bearing on the languages under test.
+      dashboardClockProvider.overrideWith((ref) => const Stream<DateTime>.empty()),
     ],
   );
+  addTearDown(container.dispose);
 
   await tester.pumpWidget(
     UncontrolledProviderScope(
