@@ -72,6 +72,7 @@ String formatField(String key, dynamic value, UnitPrefs u) {
     case 'drug':
     case 'dose':
     case 'reason':
+    case 'store':
     case 'item':
     case 'title':
       return '$value';

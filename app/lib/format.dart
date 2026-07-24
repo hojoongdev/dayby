@@ -92,11 +92,29 @@ String eventSummary(String type, String? subtype, Map<String, dynamic> fields,
   final parts = <String>[_capitalize(type)];
   if (subtype != null && subtype.isNotEmpty) parts.add(subtype.replaceAll('_', ' '));
   fields.forEach((key, value) {
-    if (_summarySkip.contains(key)) return;
-    final part = formatField(key, value, units);
+    // Money reads as one thing ("$42"), not "amount 42 · USD".
+    if (_summarySkip.contains(key) || key == 'currency') return;
+    final part = key == 'amount'
+        ? formatMoney(value, fields['currency'] as String?)
+        : formatField(key, value, units);
     if (part.isNotEmpty) parts.add(part);
   });
   return parts.join(' · ');
+}
+
+/// A price with its currency symbol in front where there is one.
+String formatMoney(dynamic amount, String? currency) {
+  switch (currency) {
+    case 'USD':
+      return '\$$amount';
+    case 'KRW':
+      return '₩$amount';
+    case null:
+    case '':
+      return '$amount';
+    default:
+      return '$amount $currency';
+  }
 }
 
 /// "Today" / "Yesterday" / "Jul 10" (adds the year only when it differs).
