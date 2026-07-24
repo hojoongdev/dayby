@@ -37,6 +37,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-false}
+      # OpenAI-compatible / local LLM (LLM_PROVIDER=openai or local). Point at Ollama,
+      # LM Studio, or any hosted /chat/completions endpoint.
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://localhost:11434/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-llama3.1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AUTH_PROVIDER: ${AUTH_PROVIDER:-none}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       JWT_SECRET: ${JWT_SECRET:-dev-secret-not-for-production-generate-a-real-one}

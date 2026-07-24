@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # retried out of sight for minutes and the caller holds a request that never returns.
     gemini_timeout_ms: int = 45_000
 
+    # OpenAI-compatible / local LLM (used when llm_provider == "openai" or "local").
+    # Point at any /chat/completions endpoint: a local Ollama or LM Studio, or a hosted
+    # API. Most local servers need no key. This is what makes the model swappable, and
+    # runnable entirely on your own machine.
+    openai_base_url: str = "http://localhost:11434/v1"
+    openai_model: str = "llama3.1"
+    openai_api_key: str = ""
+    openai_timeout_ms: int = 60_000
+
     # Auth. "none" = no identity provider; the caller names its family with the
     # X-Family-Id header, which is only allowed in development. "mock" runs the whole
     # sign-in flow with no keys (development only). "google" verifies real ID tokens.

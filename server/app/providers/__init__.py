@@ -15,6 +15,11 @@ def get_llm_provider() -> LLMProvider:
         from .llm.gemini import GeminiLLMProvider
 
         return GeminiLLMProvider()
+    if name in ("openai", "local"):
+        # Any OpenAI-compatible endpoint, including a local Ollama or LM Studio.
+        from .llm.openai_compatible import OpenAICompatibleLLMProvider
+
+        return OpenAICompatibleLLMProvider()
     raise ValueError(f"Unknown LLM_PROVIDER: {name!r}")
 
 
