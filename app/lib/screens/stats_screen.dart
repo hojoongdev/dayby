@@ -16,11 +16,50 @@ import '../widgets/rhythm.dart';
 /// relationship that is not there. And every figure is written as well as painted — some of
 /// these hues sit below the contrast a chart is meant to clear on a surface this pale, and
 /// the price of using them is that the number has to be legible without them.
-class StatsScreen extends ConsumerWidget {
+/// How much history the charts cover.
+enum _SRange { week, month, quarter, all, custom }
+
+class StatsScreen extends ConsumerStatefulWidget {
   const StatsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StatsScreen> createState() => _StatsScreenState();
+}
+
+class _StatsScreenState extends ConsumerState<StatsScreen> {
+  _SRange _sel = _SRange.month;
+  DateTimeRange? _custom;
+
+  int get _days => switch (_sel) {
+        _SRange.week => 7,
+        _SRange.month => 30,
+        _SRange.quarter => 90,
+        _SRange.all => 800,
+        _SRange.custom =>
+          _custom == null ? 30 : (_custom!.duration.inDays + 1).clamp(1, 800),
+      };
+
+  DateTime? get _asOf => _sel == _SRange.custom ? _custom?.end : null;
+
+  Future<void> _pickCustom() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange: _custom ??
+          DateTimeRange(start: now.subtract(const Duration(days: 14)), end: now),
+    );
+    if (picked != null) {
+      setState(() {
+        _sel = _SRange.custom;
+        _custom = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final baby = ref.watch(activeBabyProvider);
 
     return Stack(
@@ -28,17 +67,86 @@ class StatsScreen extends ConsumerWidget {
         const Positioned.fill(child: GlassBackground()),
         SafeArea(
           child: baby == null
-                ? const _Nothing('Add a baby to see how the days are going.')
-                : ref.watch(statsProvider(baby.id)).when(
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (e, _) => _Nothing('Could not load the charts.\n$e'),
-                      data: (stats) => stats.isEmpty
-                          ? const _Nothing(
-                              'Nothing logged yet. Charts need a few days to say anything.')
-                          : _Charts(stats),
+              ? const _Nothing('Add a baby to see how the days are going.')
+              : Column(
+                  children: [
+                    _RangeBar(
+                      sel: _sel,
+                      custom: _custom,
+                      onSel: (s) => setState(() => _sel = s),
+                      onCustom: _pickCustom,
                     ),
+                    Expanded(
+                      child: ref
+                          .watch(statsRangeProvider(
+                              (babyId: baby.id, days: _days, asOf: _asOf)))
+                          .when(
+                            loading: () =>
+                                const Center(child: CircularProgressIndicator()),
+                            error: (e, _) =>
+                                _Nothing('Could not load the charts.\n$e'),
+                            data: (stats) => stats.isEmpty
+                                ? const _Nothing(
+                                    'Nothing logged in this range.')
+                                : _Charts(stats),
+                          ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RangeBar extends StatelessWidget {
+  const _RangeBar({
+    required this.sel,
+    required this.custom,
+    required this.onSel,
+    required this.onCustom,
+  });
+
+  final _SRange sel;
+  final DateTimeRange? custom;
+  final ValueChanged<_SRange> onSel;
+  final VoidCallback onCustom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: SegmentedButton<_SRange>(
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              segments: const [
+                ButtonSegment(value: _SRange.week, label: Text('Week')),
+                ButtonSegment(value: _SRange.month, label: Text('Month')),
+                ButtonSegment(value: _SRange.quarter, label: Text('3M')),
+                ButtonSegment(value: _SRange.all, label: Text('All')),
+              ],
+              // Custom lives outside the group, so nothing here is selected then.
+              selected: sel == _SRange.custom ? const <_SRange>{} : {sel},
+              emptySelectionAllowed: true,
+              showSelectedIcon: false,
+              onSelectionChanged: (s) {
+                if (s.isNotEmpty) onSel(s.first);
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          ActionChip(
+            avatar: const Icon(Icons.date_range_outlined, size: 18),
+            label: Text(sel == _SRange.custom && custom != null ? 'Custom' : '···'),
+            onPressed: onCustom,
           ),
         ],
+      ),
     );
   }
 }
@@ -56,8 +164,7 @@ class _Charts extends ConsumerWidget {
 
     return RefreshIndicator(
       onRefresh: () async {
-        final baby = ref.read(activeBabyProvider);
-        if (baby != null) ref.invalidate(statsProvider(baby.id));
+        ref.invalidate(statsRangeProvider);
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),

@@ -94,7 +94,7 @@ async def list_events(
     type: Optional[str] = None,
     since: Optional[datetime] = Query(None, alias="from"),
     until: Optional[datetime] = Query(None, alias="to"),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=3000),
 ) -> list[EventOut]:
     query: dict = {"family_id": family["_id"]}
     if baby_id:

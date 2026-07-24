@@ -21,6 +21,8 @@ class _FakeApiClient extends ApiClient {
   Future<List<Event>> listEvents({
     String? babyId,
     String? type,
+    DateTime? from,
+    DateTime? to,
     int limit = 100,
   }) async => const [];
 
@@ -36,7 +38,7 @@ class _FakeApiClient extends ApiClient {
       const AssistantTips();
 
   @override
-  Future<Stats> stats({required String babyId, int days = 14}) async =>
+  Future<Stats> stats({required String babyId, int days = 14, DateTime? asOf}) async =>
       const Stats();
 }
 

@@ -35,6 +35,8 @@ class _FakeApiClient extends ApiClient {
   Future<List<Event>> listEvents({
     String? babyId,
     String? type,
+    DateTime? from,
+    DateTime? to,
     int limit = 100,
   }) async => [_logged];
 

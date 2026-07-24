@@ -59,10 +59,28 @@ String formatField(String key, dynamic value, UnitPrefs u) {
       return '$value cm';
     case 'duration_min':
       return n == null ? '$value min' : formatMinutes(n);
+    case 'amount_g':
+      return '$value g';
+    case 'size':
+      return 'size $value';
+    case 'drops':
+      return n == 1 ? '1 drop' : '$value drops';
+    // Free-text fields that read fine on their own, without the key in front.
+    case 'food':
+    case 'place':
+    case 'clinic':
+    case 'drug':
+    case 'dose':
+    case 'reason':
     case 'item':
     case 'title':
       return '$value';
+    // Not worth a slot on a one-line summary; the full document still keeps it.
+    case 'currency':
+      return '';
     default:
+      if (value is bool) return '';
+      if (value is List) return value.join(', ');
       return '${key.replaceAll('_', ' ')} $value';
   }
 }

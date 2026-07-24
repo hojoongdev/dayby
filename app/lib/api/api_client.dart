@@ -327,11 +327,15 @@ class ApiClient {
   Future<List<Event>> listEvents({
     String? babyId,
     String? type,
+    DateTime? from,
+    DateTime? to,
     int limit = 100,
   }) async {
     final res = await _dio.get('/events', queryParameters: {
       'baby_id': ?babyId,
       'type': ?type,
+      'from': ?from?.toUtc().toIso8601String(),
+      'to': ?to?.toUtc().toIso8601String(),
       'limit': limit,
     });
     return (res.data as List)
@@ -387,11 +391,13 @@ class ApiClient {
 
   /// The numbers behind the charts. `now` carries this phone's offset, which is what
   /// makes a "day" on the chart mean the day they actually had.
-  Future<Stats> stats({required String babyId, int days = 14}) async {
+  Future<Stats> stats({required String babyId, int days = 14, DateTime? asOf}) async {
     final res = await _dio.get('/stats', queryParameters: {
       'baby_id': babyId,
       'days': days,
-      'now': _localNowIso(),
+      // The range ends "now" unless a custom window says otherwise; `now` also carries
+      // this phone's offset, which is what makes a chart "day" the day they had.
+      'now': asOf != null ? _iso(asOf) : _localNowIso(),
     });
     return Stats.fromJson(res.data as Map<String, dynamic>);
   }
@@ -423,14 +429,18 @@ class ApiClient {
   /// The device's current local time as an offset-aware ISO 8601 string, so the
   /// server resolves relative and clock times ("last night", "8am") in the
   /// user's timezone. What gets stored is still UTC.
-  String _localNowIso() {
-    final now = DateTime.now();
-    final off = now.timeZoneOffset;
+  String _localNowIso() => _iso(DateTime.now());
+
+  /// A local time as ISO with this phone's offset, so the server buckets it into the
+  /// day the caregiver actually had rather than UTC's.
+  String _iso(DateTime t) {
+    final local = t.toLocal();
+    final off = local.timeZoneOffset;
     final sign = off.isNegative ? '-' : '+';
     final abs = off.abs();
     final hh = abs.inHours.toString().padLeft(2, '0');
     final mm = (abs.inMinutes % 60).toString().padLeft(2, '0');
-    return '${now.toIso8601String()}$sign$hh:$mm';
+    return '${local.toIso8601String()}$sign$hh:$mm';
   }
 }
 

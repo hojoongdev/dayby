@@ -26,7 +26,7 @@ class _Fake extends ApiClient {
       const AssistantTips();
 
   @override
-  Future<List<Event>> listEvents({String? babyId, String? type, int limit = 100}) async => [
+  Future<List<Event>> listEvents({String? babyId, String? type, DateTime? from, DateTime? to, int limit = 100}) async => [
         Event(id: 'f', babyId: 'baby1', type: 'feeding', subtype: 'formula',
             fields: const {'amount_ml': 160}, time: _ago(30), createdAt: _ago(30)),
       ];

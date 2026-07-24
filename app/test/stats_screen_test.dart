@@ -63,7 +63,7 @@ class _FakeApiClient extends ApiClient {
       const [Baby(id: 'baby1', familyId: 'fam1', name: 'Haein')];
 
   @override
-  Future<Stats> stats({required String babyId, int days = 14}) async => fixture;
+  Future<Stats> stats({required String babyId, int days = 14, DateTime? asOf}) async => fixture;
 }
 
 Future<void> _pump(WidgetTester tester, Stats stats) async {
@@ -84,7 +84,9 @@ Future<void> _pump(WidgetTester tester, Stats stats) async {
         sharedPrefsProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWithValue(_FakeApiClient(fixture: stats)),
       ],
-      child: const MaterialApp(home: StatsScreen()),
+      // The range bar uses chips and a segmented button, which need a Material
+      // ancestor -- in the app that is HomeScreen's Scaffold.
+      child: const MaterialApp(home: Scaffold(body: StatsScreen())),
     ),
   );
   await tester.pumpAndSettle();
@@ -112,6 +114,6 @@ void main() {
     await _pump(tester, const Stats());
 
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('Nothing logged yet'), findsOneWidget);
+    expect(find.textContaining('Nothing logged'), findsOneWidget);
   });
 }

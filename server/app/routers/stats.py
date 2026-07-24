@@ -215,7 +215,7 @@ async def collect(family_id: str, baby_id: str, days: int, at: datetime) -> Stat
 @router.get("", response_model=Stats)
 async def stats(
     baby_id: str,
-    days: int = Query(14, ge=1, le=180),
+    days: int = Query(14, ge=1, le=800),
     at: datetime = Query(..., alias="now"),
     family: dict = Depends(get_current_family),
 ) -> Stats:

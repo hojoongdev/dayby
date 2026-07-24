@@ -90,6 +90,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final event = next.value;
       if (event == null) return;
       ref.invalidate(eventsProvider(event.babyId));
+      // Records and Analysis read their own windowed providers; catch them up too.
+      ref.invalidate(rangeEventsProvider);
+      ref.invalidate(statsRangeProvider);
       ref.invalidate(tipsProvider(event.babyId));
       ref.invalidate(statsProvider(event.babyId));
       ref.invalidate(insightsProvider(event.babyId));

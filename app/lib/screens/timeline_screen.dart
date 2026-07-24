@@ -8,6 +8,10 @@ import '../units.dart';
 import '../widgets/event_tile.dart';
 import '../widgets/glass.dart';
 
+/// How far back the records list reaches. The recent-100 default could only ever show
+/// today; a caregiver looking back over a week or a month needs the window they picked.
+enum _Range { day, week, month, all }
+
 class TimelineScreen extends ConsumerStatefulWidget {
   const TimelineScreen({super.key});
 
@@ -16,19 +20,34 @@ class TimelineScreen extends ConsumerStatefulWidget {
 }
 
 class _TimelineScreenState extends ConsumerState<TimelineScreen> {
+  _Range _range = _Range.week;
   String? _type; // null = all categories
-  DateTime? _day; // null = any date
+  DateTime _day = DateTime.now(); // the chosen day, in Day mode
 
-  bool _sameDay(DateTime a, DateTime b) {
-    final l = a.toLocal();
-    return l.year == b.year && l.month == b.month && l.day == b.day;
+  /// The [from, to) the records come from, quantised to whole days so the fetch key is
+  /// stable across rebuilds (a live `now` in the key would refetch on every frame).
+  (DateTime, DateTime) _window() {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final endOfToday = startOfToday.add(const Duration(days: 1));
+    switch (_range) {
+      case _Range.day:
+        final s = DateTime(_day.year, _day.month, _day.day);
+        return (s, s.add(const Duration(days: 1)));
+      case _Range.week:
+        return (startOfToday.subtract(const Duration(days: 6)), endOfToday);
+      case _Range.month:
+        return (startOfToday.subtract(const Duration(days: 29)), endOfToday);
+      case _Range.all:
+        return (DateTime(2015), endOfToday);
+    }
   }
 
   Future<void> _pickDay() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _day ?? now,
+      initialDate: _day,
       firstDate: DateTime(now.year - 5),
       lastDate: now,
     );
@@ -51,82 +70,129 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   }
 
   Widget _body(String babyId) {
-    final events = ref.watch(eventsProvider(babyId));
-    return events.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Could not load the timeline: $e')),
-      data: (all) {
-        final types = {for (final e in all) e.type}.toList()..sort();
-        final filtered = all
-            .where((e) => _type == null || e.type == _type)
-            .where((e) => _day == null || _sameDay(e.time, _day!))
-            .toList();
-        return Column(
-          children: [
-            _FilterBar(
-              types: types,
-              type: _type,
-              day: _day,
-              onType: (t) => setState(() => _type = t),
-              onPickDay: _pickDay,
-              onClearDay: () => setState(() => _day = null),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(eventsProvider(babyId));
-                  await ref.read(eventsProvider(babyId).future);
-                },
-                child: filtered.isEmpty
-                    ? _Scrollable(
-                        child: Text(all.isEmpty
-                            ? 'No events yet. Log something in the Log tab.'
-                            : 'No events match this filter.'),
-                      )
-                    : _EventList(filtered),
-              ),
-            ),
-          ],
-        );
-      },
+    final (from, to) = _window();
+    final events =
+        ref.watch(rangeEventsProvider((babyId: babyId, from: from, to: to)));
+    return Column(
+      children: [
+        _RangeBar(
+          range: _range,
+          day: _day,
+          onRange: (r) => setState(() => _range = r),
+          onPickDay: _pickDay,
+        ),
+        Expanded(
+          child: events.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) =>
+                Center(child: Text('Could not load the records: $e')),
+            data: (all) {
+              final types = {for (final e in all) e.type}.toList()..sort();
+              final filtered =
+                  all.where((e) => _type == null || e.type == _type).toList();
+              return Column(
+                children: [
+                  _TypeBar(
+                    types: types,
+                    type: _type,
+                    onType: (t) => setState(() => _type = t),
+                  ),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () async {
+                        ref.invalidate(rangeEventsProvider(
+                            (babyId: babyId, from: from, to: to)));
+                        await ref.read(rangeEventsProvider(
+                                (babyId: babyId, from: from, to: to))
+                            .future);
+                      },
+                      child: filtered.isEmpty
+                          ? _Scrollable(
+                              child: Text(all.isEmpty
+                                  ? 'Nothing logged in this range.'
+                                  : 'No records match this filter.'),
+                            )
+                          : _EventList(filtered),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.types,
-    required this.type,
+/// The range switch, plus the day chip when a single day is chosen.
+class _RangeBar extends StatelessWidget {
+  const _RangeBar({
+    required this.range,
     required this.day,
-    required this.onType,
+    required this.onRange,
     required this.onPickDay,
-    required this.onClearDay,
   });
 
-  final List<String> types;
-  final String? type;
-  final DateTime? day;
-  final ValueChanged<String?> onType;
+  final _Range range;
+  final DateTime day;
+  final ValueChanged<_Range> onRange;
   final VoidCallback onPickDay;
-  final VoidCallback onClearDay;
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: SegmentedButton<_Range>(
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              segments: const [
+                ButtonSegment(value: _Range.day, label: Text('Day')),
+                ButtonSegment(value: _Range.week, label: Text('Week')),
+                ButtonSegment(value: _Range.month, label: Text('Month')),
+                ButtonSegment(value: _Range.all, label: Text('All')),
+              ],
+              selected: {range},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => onRange(s.first),
+            ),
+          ),
+          if (range == _Range.day) ...[
+            const SizedBox(width: 8),
+            ActionChip(
+              avatar: const Icon(Icons.event_outlined, size: 18),
+              label: Text(formatDate(day)),
+              onPressed: onPickDay,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The category filter chips, built from the types actually present in the range.
+class _TypeBar extends StatelessWidget {
+  const _TypeBar({required this.types, required this.type, required this.onType});
+
+  final List<String> types;
+  final String? type;
+  final ValueChanged<String?> onType;
+
+  @override
+  Widget build(BuildContext context) {
+    if (types.isEmpty) return const SizedBox(height: 8);
     return SizedBox(
-      height: 52,
+      height: 48,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: InputChip(
-              avatar: const Icon(Icons.event_outlined, size: 18),
-              label: Text(day == null ? 'Any date' : formatDate(day!)),
-              onPressed: onPickDay,
-              onDeleted: day == null ? null : onClearDay,
-            ),
-          ),
           _chip(context, 'All', type == null, () => onType(null)),
           for (final t in types)
             _chip(context, _cap(t), type == t, () => onType(t)),
@@ -135,7 +201,8 @@ class _FilterBar extends StatelessWidget {
     );
   }
 
-  Widget _chip(BuildContext context, String label, bool selected, VoidCallback onTap) {
+  Widget _chip(
+      BuildContext context, String label, bool selected, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: ChoiceChip(
@@ -186,7 +253,9 @@ class _EventList extends ConsumerWidget {
   Future<void> _delete(WidgetRef ref, Event event) async {
     await ref.read(apiClientProvider).deleteEvent(event.id);
     ref.invalidate(eventsProvider(event.babyId));
+    ref.invalidate(rangeEventsProvider);
     ref.invalidate(tipsProvider(event.babyId));
+    ref.invalidate(statsProvider(event.babyId));
   }
 
   @override

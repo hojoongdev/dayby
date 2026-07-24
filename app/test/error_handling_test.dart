@@ -18,7 +18,7 @@ class _FailingApiClient extends ApiClient {
   Future<List<Baby>> listBabies() async => babies;
 
   @override
-  Future<List<Event>> listEvents({String? babyId, String? type, int limit = 100}) async =>
+  Future<List<Event>> listEvents({String? babyId, String? type, DateTime? from, DateTime? to, int limit = 100}) async =>
       const [];
 
   @override

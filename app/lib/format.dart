@@ -82,11 +82,20 @@ String _capitalize(String s) =>
 
 /// A one-line human summary, e.g. "Feeding · formula · 120 ml", with fields
 /// converted to the caregiver's preferred units.
+/// Plumbing or too-verbose fields that a one-line summary leaves out. The document
+/// still holds them (queries and the wrapped story read them); the tile just does not
+/// shout them.
+const _summarySkip = {'photo_id', 'made_at_home', 'ingredients', 'texture'};
+
 String eventSummary(String type, String? subtype, Map<String, dynamic> fields,
     {UnitPrefs units = const UnitPrefs()}) {
   final parts = <String>[_capitalize(type)];
-  if (subtype != null && subtype.isNotEmpty) parts.add(subtype);
-  fields.forEach((key, value) => parts.add(formatField(key, value, units)));
+  if (subtype != null && subtype.isNotEmpty) parts.add(subtype.replaceAll('_', ' '));
+  fields.forEach((key, value) {
+    if (_summarySkip.contains(key)) return;
+    final part = formatField(key, value, units);
+    if (part.isNotEmpty) parts.add(part);
+  });
   return parts.join(' · ');
 }
 

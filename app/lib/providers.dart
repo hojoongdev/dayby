@@ -277,9 +277,24 @@ final activeBabyProvider = Provider<Baby?>((ref) {
   return babies.firstWhere((b) => b.id == id, orElse: () => babies.first);
 });
 
-/// Timeline for one baby, newest first. Invalidate to refetch after a save.
+/// Timeline for one baby, newest first. The default 100 most-recent: enough for the
+/// dashboard's "last feeding" and today's counts. Invalidate to refetch after a save.
 final eventsProvider = FutureProvider.family<List<Event>, String>(
   (ref, babyId) => ref.watch(apiClientProvider).listEvents(babyId: babyId),
+);
+
+/// The records a caregiver scrolls: a window they chose (a day, a week, a month), not
+/// just the recent 100. Records over months is exactly what the recent-100 default
+/// could not show. Keyed by (baby, from, to) so each window is fetched and cached once.
+typedef EventWindow = ({String babyId, DateTime from, DateTime to});
+
+final rangeEventsProvider = FutureProvider.family<List<Event>, EventWindow>(
+  (ref, w) => ref.watch(apiClientProvider).listEvents(
+        babyId: w.babyId,
+        from: w.from,
+        to: w.to,
+        limit: 3000,
+      ),
 );
 
 /// The camera / library picker. Behind a provider so a test can hand the screen a
@@ -385,6 +400,16 @@ final tipsProvider = FutureProvider.family<AssistantTips, String>(
 /// a chart that does not move when you log something is a chart nobody trusts.
 final statsProvider = FutureProvider.family<Stats, String>(
   (ref, babyId) => ref.watch(apiClientProvider).stats(babyId: babyId),
+);
+
+/// The charts over a window the caregiver picked: this week, this month, all of it.
+/// Keyed by (baby, days) so each range is its own fetch. `asOf` lets a custom range
+/// end somewhere other than now.
+typedef StatsWindow = ({String babyId, int days, DateTime? asOf});
+
+final statsRangeProvider = FutureProvider.family<Stats, StatsWindow>(
+  (ref, w) => ref.watch(apiClientProvider)
+      .stats(babyId: w.babyId, days: w.days, asOf: w.asOf),
 );
 
 /// A tick every 30s, so "N ago" text and the fill-toward-next bars on the dashboard
