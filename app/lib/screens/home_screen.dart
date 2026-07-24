@@ -185,7 +185,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             const Positioned(top: 0, right: 4, child: SafeArea(child: _MessageButton())),
           Positioned(
             right: 20,
-            bottom: 92,
+            // Clear the floating tab bar and the home indicator, so the orb never sits on
+            // top of them on a phone with a bottom inset.
+            bottom: MediaQuery.of(context).padding.bottom + 88,
             // Opens the panel ready to talk OR type -- the mic does not auto-record, so
             // choosing to type does not first record silence and complain it heard nothing.
             child: _VoiceOrb(onTap: () => _openVoice(startVoice: false)),
