@@ -13,8 +13,12 @@ from .db import get_db
 from .models.events import QueryPlan
 
 # The fields a "contains" word is matched against: the open text of a record, not its id.
+# Includes nested paths (a vaccine name inside an array of shots), so a question can reach
+# into the open schema, not just the note.
 _TEXT_FIELDS = ("note", "subtype", "type", "fields.title", "fields.item",
-                "fields.name", "fields.brand", "fields.location", "fields.food")
+                "fields.name", "fields.brand", "fields.location", "fields.food",
+                "fields.place", "fields.store", "fields.clinic", "fields.drug",
+                "fields.doctor", "fields.vaccines.name", "fields.color")
 _AGG_OPS = ("sum", "avg", "min", "max")
 MAX_RECORDS = 200
 

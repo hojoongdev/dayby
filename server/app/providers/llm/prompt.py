@@ -196,9 +196,12 @@ Rules:
 - A record may be stored in a different language or wording than the question: a feed
   logged as "bottle" or "formula" for a question that says "분유"; a "check-up" for "검진".
   So lean on "type", the date range, and "aggregate", which do not depend on wording. Set
-  "subtype" only when you are certain of its exact stored value, and use "contains" only for
-  a genuine proper noun (a clinic or brand name). When unsure, leave them null and let the
-  type filter do the work — a slightly broad query beats one that matches nothing.
+  "subtype" only when you are certain of its exact stored value. Use "contains" for a proper
+  noun (a clinic or brand) OR for a distinctive word naming the specific kind when the type
+  alone is too broad -- "vaccine" among medicines, "porridge" among feeds -- because the word
+  is matched against the note and the open fields, not just the type, so it isolates the few
+  records that a type filter would drown. When unsure, leave them null and let the type filter
+  do the work — a slightly broad query beats one that matches nothing.
 - Prefer a tight query, but never so tight it returns nothing: type + date is usually enough.
 - Output JSON only. No commentary."""
 
@@ -373,6 +376,11 @@ Rules:
   set "lang" to that code. If it seems to be a language not on that list, you have misheard:
   read it as the listed language it most resembles. "reply" is one warm sentence in the
   language it was said in.{record_rule}
+- Put the specifics in "fields", not buried in the note: a brand, a store, a place, a food,
+  an amount, a side, a doctor. When several things are named at once -- the vaccines given, a
+  recipe's ingredients -- make that field an array (of objects if each has parts, e.g.
+  "vaccines": [{{"name": "DTaP"}}]). Keep numbers numeric and units canonical (ml, celsius,
+  kg). The note is for whatever is left over.
 - The conversation above is what is on the caregiver's screen. Use it to resolve what the new
   utterance leaves out: "it", "that one", a bare amount ("actually 200"), a question with no
   subject ("and yesterday?").
