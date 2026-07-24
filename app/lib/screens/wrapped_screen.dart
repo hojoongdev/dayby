@@ -55,7 +55,7 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen> {
           const Positioned.fill(child: GlassBackground()),
           SafeArea(
             child: wrapped.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => _MemoriesLoading(name: widget.baby.name),
               error: (e, _) => Center(child: Text('Could not load: $e')),
               data: (w) => w.stats.isEmpty
                   ? const Center(child: Text('Log a few days first.'))
@@ -192,7 +192,7 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen> {
               children: [
                 for (final spend in s.spend)
                   Text(
-                    '${formatCount(spend.total)} ${spend.currency}'
+                    '${formatMoney(formatCount(spend.total), spend.currency)}'
                     ' · ${formatCount(spend.count)} purchases',
                     style: theme.textTheme.titleMedium,
                   ),
@@ -299,6 +299,50 @@ class _Journey extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The story is one aggregation plus a model write, a few seconds either way. A bare
+/// spinner reads as a stall; this frames the wait as what it is -- looking back.
+class _MemoriesLoading extends StatelessWidget {
+  const _MemoriesLoading({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 34,
+              width: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: theme.colorScheme.primary.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Looking back through your days with $name…',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Gathering every feed, nap and little first.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
