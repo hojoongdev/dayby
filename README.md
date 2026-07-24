@@ -24,7 +24,7 @@ holding a newborn.
 [FastAPI server (Python)]
   - Auth abstraction  (mock / Google; sessions + refresh)
   - STT abstraction   (mock / Gemini audio)
-  - LLM abstraction   (mock / Gemini)
+  - LLM abstraction   (mock / Gemini / local, OpenAI-compatible)
   - Ingest pipeline   (text / voice / photo -> create/update/delete/query)
   - Aggregations -> LLM (proactive tips, the keepsake)
   - Change stream -> WebSocket (live family sync)
@@ -35,7 +35,8 @@ holding a newborn.
 
 Every API key (LLM / STT) lives **only on the server** — never in the app.
 
-Not built yet: charts, and the Swift side (App Intents, Action button, widgets).
+Not built yet: the remaining Swift surfaces (widgets, Watch). The Action button and its
+App Intent are in, and need a release build on a device to exercise.
 
 ## Tech stack
 
@@ -45,7 +46,7 @@ Not built yet: charts, and the Swift side (App Intents, Action button, widgets).
 | Server | Python + FastAPI | async |
 | Database | MongoDB (async PyMongo) | flexible document schema is the point |
 | STT | provider abstraction | mock / Gemini audio, swappable |
-| LLM | provider abstraction | mock / Gemini, swappable |
+| LLM | provider abstraction | mock / Gemini / local (OpenAI-compatible), swappable |
 | Auth | provider abstraction | mock / Google, swappable |
 | iOS integration | Swift + App Intents / WidgetKit | **planned, not built** |
 
@@ -56,8 +57,8 @@ Built in vertical slices — each phase ends in a running, demoable state.
 - P1 — Server + DB + text logging — **done**
 - P2 — Flutter app + voice: conversational chat, spoken replies, photos — **done**
 - P3 — Conversation context, query, edit / delete by voice, multiple babies — **done**
-- P4 — Real-time family sync — **done**. Charts are not: the aggregations exist (they are
-  what the home dashboard and the keepsake are written from) but there is no chart screen.
+- P4 — Stats and real-time family sync — **done**. The charts read a windowed aggregation
+  (day / week / month / all); one parent's log updates the other's phone over a change stream.
 - P5 — iOS Shortcuts / Action button / widgets — **not started**; needs Swift and a device
 - P6 — LLM analysis — **done** (answers grounded in your own logs, proactive tips, the
   keepsake); polish is ongoing
@@ -123,6 +124,15 @@ cd app && flutter run --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.
   floor of -29 dBFS where a quiet bedroom reads -50, so no hardcoded level survives both.
   It measures the room at the top of every recording instead. It can fail only one way:
   the recording runs on and you tap stop, never that it cuts you off mid-sentence.
+- **Records in the language you choose.** Speak Korean, file the record in English — the
+  stored note, custom labels and food come back translated while the spoken reply stays in
+  the language you said it in, and the numbers, units and times never move.
+- **A window, not the recent hundred.** Records and Analysis fetch the range you pick — a
+  day, a week, a month, all of it — from the server's `from`/`to`, so a long history is not
+  hidden behind whatever last loaded on screen.
+- **Bring your own model, even a local one.** `LLM_PROVIDER=local` points the same prompts
+  at any OpenAI-compatible endpoint (a local Ollama or LM Studio), so the whole thing can
+  run on your own machine with no hosted key.
 
 ## Repository layout
 
