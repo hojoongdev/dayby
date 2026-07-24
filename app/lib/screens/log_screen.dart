@@ -55,11 +55,15 @@ class _Attachment {
 }
 
 class LogScreen extends ConsumerStatefulWidget {
-  const LogScreen({super.key, this.startVoice = false});
+  const LogScreen({super.key, this.startVoice = false, this.embedded = false});
 
   /// Open the mic as soon as the screen is up. The voice orb and the Action button
   /// both bring this screen up already listening.
   final bool startVoice;
+
+  /// Rendered as a floating panel inside an overlay (the orb), not a full page. No
+  /// Scaffold or its own background — the overlay behind it is already blurred.
+  final bool embedded;
 
   @override
   ConsumerState<LogScreen> createState() => _LogScreenState();
@@ -527,6 +531,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final babies = ref.watch(babiesProvider).value ?? const <Baby>[];
     final active = ref.watch(activeBabyProvider);
 
+    if (widget.embedded) return _panel(active, babies);
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -555,6 +561,52 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The floating chat panel behind the orb: a glass card with a slim header, the
+  /// conversation, and the compose bar. The overlay around it is already blurred, so
+  /// there is no full-screen background here.
+  Widget _panel(Baby? active, List<Baby> babies) {
+    final theme = Theme.of(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: GlassCard(
+        radius: 26,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 6, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.graphic_eq, size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text('Talk to Dayby', style: theme.textTheme.titleSmall),
+                  const Spacer(),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: _muted ? 'Unmute' : 'Mute',
+                    onPressed: () {
+                      if (!_muted) _tts.stop();
+                      setState(() => _muted = !_muted);
+                    },
+                    icon: Icon(_muted ? Icons.volume_off : Icons.volume_up, size: 20),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _conversation(active, babies)),
+            _composeBar(active),
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -68,26 +70,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (action == 'log_voice') ref.read(voiceLaunchProvider.notifier).request();
   }
 
-  /// The conversation slides up over the tab you were on, as a sheet — it does not
-  /// replace the screen. One at a time. Only a hands-free launch (the Action button or
-  /// Siri) starts the mic on its own; a tap on the orb opens it ready to listen.
+  /// A floating chat panel in the bottom-right corner, over a blurred version of the tab
+  /// you were on — it does not replace the screen. Tapping outside or the close button
+  /// dismisses it. One at a time. Only a hands-free launch (the Action button or Siri)
+  /// starts the mic on its own; a tap on the orb opens it ready to listen.
   Future<void> _openVoice({bool startVoice = false}) async {
     if (_voiceOpen || !mounted) return;
     _voiceOpen = true;
-    await showModalBottomSheet<void>(
+    await showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      builder: (_) => Padding(
-        // Leave the top of the screen showing, so it reads as a panel over the tab,
-        // not a new page.
-        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 52),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-          child: LogScreen(startVoice: startVoice),
-        ),
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Voice',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (ctx, _, _) {
+        final media = MediaQuery.of(ctx);
+        final size = media.size;
+        final insets = media.viewInsets.bottom;
+        final panelW = size.width >= 480 ? 420.0 : size.width - 20;
+        final maxH = size.height - media.padding.top - 24 - insets;
+        final panelH = (size.height * 0.74).clamp(320.0, maxH);
+        return GestureDetector(
+          onTap: () => Navigator.of(ctx).pop(),
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            children: [
+              // Blur and dim the tab behind, so the panel reads as an overlay.
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: const ColoredBox(color: Color(0x33000000)),
+                ),
+              ),
+              Positioned(
+                right: 10,
+                bottom: 10 + insets,
+                child: GestureDetector(
+                  onTap: () {}, // swallow taps so the panel itself does not dismiss
+                  child: SizedBox(
+                    width: panelW,
+                    height: panelH,
+                    child: LogScreen(startVoice: startVoice, embedded: true),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, _, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0.04, 0.10), end: Offset.zero)
+                .animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
     _voiceOpen = false;
   }
@@ -145,7 +186,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           Positioned(
             right: 20,
             bottom: 92,
-            child: _VoiceOrb(onTap: () => _openVoice(startVoice: true)),
+            // Opens the panel ready to talk OR type -- the mic does not auto-record, so
+            // choosing to type does not first record silence and complain it heard nothing.
+            child: _VoiceOrb(onTap: () => _openVoice(startVoice: false)),
           ),
         ],
       ),
