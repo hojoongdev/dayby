@@ -41,6 +41,7 @@ async def build_llm_context(
     lang: Optional[str] = None,
     history: Optional[list[Turn]] = None,
     languages: Optional[list[str]] = None,
+    record_lang: Optional[str] = None,
 ) -> LlmContext:
     """Baby names (for "who"), age/sex profiles (for age-aware answers), the chat history
     the model resolves references against, and the languages this caregiver speaks."""
@@ -59,6 +60,7 @@ async def build_llm_context(
         baby_names=names,
         baby_profiles=profiles,
         lang=lang,
+        record_lang=record_lang,
         languages=lang_codes.known(languages or []) or lang_codes.DEFAULT,
         history=trim_history(history or []),
     )

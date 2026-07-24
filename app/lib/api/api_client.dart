@@ -247,12 +247,14 @@ class ApiClient {
     String text, {
     List<Turn> history = const [],
     List<String> languages = const [],
+    String? recordLang,
   }) async {
     final res = await _dio.post('/ingest/text', data: {
       'text': text,
       'now': _localNowIso(),
       'history': [for (final turn in history) turn.toJson()],
       'languages': languages,
+      'record_lang': ?recordLang,
     });
     return StructuredResult.fromJson(res.data as Map<String, dynamic>);
   }
@@ -264,11 +266,13 @@ class ApiClient {
     required String mimeType,
     List<Turn> history = const [],
     List<String> languages = const [],
+    String? recordLang,
   }) async {
     final form = FormData.fromMap({
       'now': _localNowIso(),
       'history': jsonEncode([for (final turn in history) turn.toJson()]),
       'languages': languages.join(','),
+      'record_lang': ?recordLang,
       'file': MultipartFile.fromBytes(
         bytes,
         filename: 'speech.wav',
@@ -353,12 +357,14 @@ class ApiClient {
     String text = '',
     List<Turn> history = const [],
     List<String> languages = const [],
+    String? recordLang,
   }) async {
     final form = FormData.fromMap({
       'baby_id': babyId,
       'text': text,
       'now': _localNowIso(),
       'languages': languages.join(','),
+      'record_lang': ?recordLang,
       // Multipart fields are scalars, so the history goes as a JSON string.
       'history': jsonEncode([for (final turn in history) turn.toJson()]),
       'file': MultipartFile.fromBytes(

@@ -125,6 +125,9 @@ class LlmContext(BaseModel):
     # e.g. "Haein (5 months old, female)" — lets the model answer/tip by age.
     baby_profiles: list[str] = Field(default_factory=list)
     lang: Optional[str] = None
+    # The language records are stored in, regardless of what was spoken. None = keep the
+    # spoken language. Set to "en" so a Korean sentence is filed as an English note.
+    record_lang: Optional[str] = None
     # The languages this caregiver says they speak. Nothing said to Dayby is in any other
     # one, and saying so is what stops a mumbled Korean sentence coming back as Chinese.
     languages: list[str] = Field(default_factory=list)
@@ -135,6 +138,7 @@ class LlmContext(BaseModel):
 class IngestTextRequest(BaseModel):
     text: str
     lang: Optional[str] = None
+    record_lang: Optional[str] = None
     languages: list[str] = Field(default_factory=list)
     baby_ref: Optional[str] = None
     now: Optional[datetime] = None

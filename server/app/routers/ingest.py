@@ -152,7 +152,8 @@ async def ingest_text(
     family: dict = Depends(get_current_family),
 ) -> StructuredResult:
     ctx = await build_llm_context(
-        family, req.now or now(), req.lang, req.history, req.languages
+        family, req.now or now(), req.lang, req.history, req.languages,
+        record_lang=req.record_lang,
     )
     result = _held_to_language(await get_llm_provider().structure_log(req.text, ctx), ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or req.text)
@@ -167,6 +168,7 @@ async def ingest_text(
 async def ingest_voice(
     file: UploadFile = File(...),
     lang: Optional[str] = Form(None),
+    record_lang: Optional[str] = Form(None),
     languages: str = Form(""),
     at: Optional[datetime] = Form(None, alias="now"),
     history: str = Form("[]"),
@@ -201,7 +203,9 @@ async def ingest_voice(
             status_code=422, detail="I couldn't make that out — say it again?"
         )
 
-    ctx = await build_llm_context(family, at or now(), lang, _turns(history), spoken)
+    ctx = await build_llm_context(
+        family, at or now(), lang, _turns(history), spoken, record_lang=record_lang
+    )
     result = _held_to_language(await get_llm_provider().structure_log(transcript, ctx), ctx)
     result = await _answer_if_query(result, family, ctx, result.query_text or transcript)
     result = await _find_target(result, family, ctx, transcript)
@@ -218,6 +222,7 @@ async def ingest_photo(
     baby_id: str = Form(...),
     text: str = Form(""),
     lang: Optional[str] = Form(None),
+    record_lang: Optional[str] = Form(None),
     languages: str = Form(""),
     at: Optional[datetime] = Form(None, alias="now"),
     history: str = Form("[]"),
@@ -237,7 +242,8 @@ async def ingest_photo(
     photo_id = await store_photo(data, content_type, family["_id"], baby_id)
 
     ctx = await build_llm_context(
-        family, at or now(), lang, _turns(history), _languages(languages)
+        family, at or now(), lang, _turns(history), _languages(languages),
+        record_lang=record_lang,
     )
     result = _held_to_language(
         await get_llm_provider().structure_photo(data, content_type, text, ctx), ctx

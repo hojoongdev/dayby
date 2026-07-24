@@ -188,6 +188,13 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     await _sendVoice(audio);
   }
 
+  /// The language records are filed in. "auto" means keep the spoken words, so send
+  /// nothing and let the server leave them alone.
+  String? _recordLang() {
+    final v = ref.read(recordLangProvider);
+    return v == 'auto' ? null : v;
+  }
+
   Future<void> _sendVoice(Uint8List audio) async {
     final history = _turns();
     final languages = ref.read(spokenLanguagesProvider);
@@ -202,6 +209,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             mimeType: VoiceRecorder.mimeType,
             history: history,
             languages: languages,
+            recordLang: _recordLang(),
           );
       if (!mounted) return;
       // The transcript is the caregiver's own bubble: with the server listening, this is
@@ -316,7 +324,8 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     _scrollToBottom();
     try {
       final result = photo == null
-          ? await api.ingestText(text, history: history, languages: languages)
+          ? await api.ingestText(text,
+              history: history, languages: languages, recordLang: _recordLang())
           : (await api.ingestPhoto(
               babyId: baby!.id,
               bytes: photo.bytes,
@@ -325,6 +334,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
               text: text,
               history: history,
               languages: languages,
+              recordLang: _recordLang(),
             ))
               .result;
       if (!mounted) return;

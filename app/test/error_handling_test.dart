@@ -26,6 +26,7 @@ class _FailingApiClient extends ApiClient {
     String text, {
     List<Turn> history = const [],
     List<String> languages = const [],
+    String? recordLang,
   }) async {
     throw DioException(
       requestOptions: RequestOptions(path: '/ingest/text'),

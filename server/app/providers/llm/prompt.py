@@ -316,10 +316,23 @@ Photo rules:
 - If the caregiver said nothing at all, still write a warm "reply" describing what you see."""
 
 
+_LANG_NAMES = {"en": "English", "ko": "Korean"}
+
+
 def build_system_instruction(ctx: LlmContext) -> str:
     babies = ", ".join(ctx.baby_names) if ctx.baby_names else "(none registered)"
     profiles = "; ".join(ctx.baby_profiles) if ctx.baby_profiles else "(none)"
     types_ = ", ".join(STANDARD_EVENT_TYPES)
+    if ctx.record_lang:
+        record_name = _LANG_NAMES.get(ctx.record_lang, ctx.record_lang)
+        record_rule = (
+            f' Store the record in {record_name} ({ctx.record_lang}): write "note", any '
+            f'custom "type"/"subtype", and free-text field values (food, place, item) in '
+            f"that language, translating from whatever was said. Numbers, units, canonical "
+            f'types and times are unchanged. "reply" still stays in the spoken language.'
+        )
+    else:
+        record_rule = ' Keep "note" and any free text in the language it was said in.'
     return f"""You extract a structured baby-care log entry from a short caregiver utterance.
 
 Current time (ISO 8601, the caller's local time with UTC offset): {ctx.now.isoformat()}
@@ -358,8 +371,8 @@ Return ONLY a JSON object with this exact shape:
 Rules:
 - The utterance is in one of the languages listed above, and in no other. Detect which, and
   set "lang" to that code. If it seems to be a language not on that list, you have misheard:
-  read it as the listed language it most resembles. Keep "note" and "reply" in the language
-  it was said in; "reply" is one warm sentence.
+  read it as the listed language it most resembles. "reply" is one warm sentence in the
+  language it was said in.{record_rule}
 - The conversation above is what is on the caregiver's screen. Use it to resolve what the new
   utterance leaves out: "it", "that one", a bare amount ("actually 200"), a question with no
   subject ("and yesterday?").

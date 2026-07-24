@@ -37,6 +37,7 @@ class _FakeApiClient extends ApiClient {
     String text, {
     List<Turn> history = const [],
     List<String> languages = const [],
+    String? recordLang,
   }) async {
     sent.add(history);
     final reply = replies[_call++];

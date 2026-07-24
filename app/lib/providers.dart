@@ -30,6 +30,7 @@ const familyNameKey = 'family_name';
 const inviteCodeKey = 'invite_code';
 const selectedBabyIdKey = 'selected_baby_id';
 const assistantLangKey = 'assistant_lang';
+const recordLangKey = 'record_lang';
 const spokenLanguagesKey = 'spoken_languages';
 const appLockKey = 'app_lock';
 const themeModeKey = 'theme_mode';
@@ -487,6 +488,22 @@ class AssistantLangNotifier extends Notifier<String> {
 
 final assistantLangProvider =
     NotifierProvider<AssistantLangNotifier, String>(AssistantLangNotifier.new);
+
+/// The language records are filed in, whatever the caregiver speaks. "auto" keeps the
+/// spoken words; "en"/"ko" translate the stored note and custom labels. Defaults to
+/// English, so a Korean sentence is kept as an English record.
+class RecordLangNotifier extends Notifier<String> {
+  @override
+  String build() => ref.watch(sharedPrefsProvider).getString(recordLangKey) ?? 'en';
+
+  Future<void> set(String lang) async {
+    await ref.read(sharedPrefsProvider).setString(recordLangKey, lang);
+    state = lang;
+  }
+}
+
+final recordLangProvider =
+    NotifierProvider<RecordLangNotifier, String>(RecordLangNotifier.new);
 
 /// Light, dark, or whatever the phone is set to. Defaults to the phone.
 class ThemeModeNotifier extends Notifier<ThemeMode> {

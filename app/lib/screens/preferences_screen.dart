@@ -89,6 +89,19 @@ class LanguagesScreen extends ConsumerWidget {
           options: {for (final code in spoken) code: languageName(code)},
           onChanged: (v) => ref.read(assistantLangProvider.notifier).set(v),
         ),
+        const Divider(height: 32),
+        const _Heading('Records are saved in'),
+        // What is stored, whatever you speak. Say a feed in Korean, keep the note in
+        // English. Numbers, times and units never change with this.
+        _Choice(
+          label: 'Language',
+          value: ref.watch(recordLangProvider),
+          options: {
+            'auto': 'As spoken',
+            for (final code in kLanguages.keys) code: languageName(code),
+          },
+          onChanged: (v) => ref.read(recordLangProvider.notifier).set(v),
+        ),
       ],
     );
   }
