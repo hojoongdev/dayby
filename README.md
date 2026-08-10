@@ -59,34 +59,124 @@ Built in vertical slices — each phase ends in a running, demoable state.
 - P3 — Conversation context, query, edit / delete by voice, multiple babies — **done**
 - P4 — Stats and real-time family sync — **done**. The charts read a windowed aggregation
   (day / week / month / all); one parent's log updates the other's phone over a change stream.
-- P5 — iOS Shortcuts / Action button / widgets — **not started**; needs Swift and a device
+- P5 — iOS Shortcuts / Action button / widgets — **partly done**. The Action button and its
+  Siri phrase open the app already listening; home-screen widgets and Watch are not built
 - P6 — LLM analysis — **done** (answers grounded in your own logs, proactive tips, the
   keepsake); polish is ongoing
+
+Since then: reminder rules a family sets for itself (including by voice), forward predictions
+and weekly trends, notes between caregivers, email+password accounts, and dark mode.
 
 Verified on a real iPhone: recording, upload, transcription. The one thing still to confirm
 on a device is where the silence detector decides a sentence has ended — see `voice.dart`.
 
 ## Quickstart
 
+You need [Docker](https://docs.docker.com/get-started/get-docker/) for the server, and
+[Flutter](https://docs.flutter.dev/get-started/install) 3.44+ for the app. No API keys:
+the LLM, STT and TTS providers all default to **mock**, so the whole pipeline runs offline.
+
+**1. Start the server**
+
 ```bash
-cp .env.example .env      # optional — sane defaults are baked into docker-compose
+git clone https://github.com/hojoongdev/dayby.git
+cd dayby
+cp .env.example .env      # optional — docker-compose has the same defaults baked in
 docker compose up --build
 curl localhost:8000/health   # -> {"status":"ok","mongo":true}
 ```
 
-No API keys required: the LLM and STT providers default to **mock** implementations,
-so the whole pipeline runs offline.
-
 MongoDB comes up as a single-node **replica set**. That is not about redundancy — it is
-what change streams need, and change streams are how the live family sync works.
+what change streams need, and change streams are how the live family sync works. It is not
+published to the host, so it will not collide with a MongoDB you already run. If port 8000
+is taken, set `PORT` in `.env`.
 
-To sign in with a real Google account rather than the mock, both halves need the same
-OAuth client — the server verifies what the app was issued:
+**2. Run the app**
+
+```bash
+cd app
+flutter pub get
+flutter run -d chrome        # or: flutter run   (iOS simulator, or a connected iPhone)
+```
+
+It talks to `http://localhost:8000` out of the box. Chrome is the fastest look — recording
+and spoken replies both work there; Face ID, scheduled notifications and Google Sign-In are
+the parts that need a real phone. Android builds but has none of its permissions declared
+yet, so it is iOS or the browser for now.
+
+The server address is editable at runtime (**Settings → Server**), which is how you point a
+phone at the machine running the server — they have to be on the same Wi-Fi, and a phone
+cannot reach `localhost`:
+
+```bash
+ipconfig getifaddr en0       # the Mac's LAN address, e.g. 10.0.1.23
+```
+
+Type `http://10.0.1.23:8000` into Settings → Server. A build can also bake in a default
+with `flutter run --dart-define=DAYBY_API=http://10.0.1.23:8000`.
+
+**3. Fill it with a week of records (optional)**
+
+An empty app has empty charts. The seed script writes plausible history straight into
+MongoDB, dated in the past:
+
+```bash
+docker compose exec server python -m scripts.seed --latest --tz +09:00
+```
+
+`--latest` means the family you just created in the app; `--invite 5180d2` picks one by the
+invite code shown in Settings. `--tz` should be your own offset, or the records land at the
+wrong hours.
+
+## Configuration
+
+Everything below is optional — copy `.env.example` to `.env` and edit. See that file for
+the full list.
+
+**A real model instead of the mock.** `LLM_PROVIDER=gemini` and `STT_PROVIDER=gemini` with a
+`GEMINI_API_KEY` from [AI Studio](https://aistudio.google.com/apikey). `TTS_PROVIDER=gemini`
+adds a natural, language-aware voice; without it the app speaks with the device voice.
+
+**Or your own local model.** `LLM_PROVIDER=local` points the same prompts at any
+OpenAI-compatible `/chat/completions` endpoint, so Ollama or LM Studio can run the whole
+thing on your machine:
+
+```bash
+LLM_PROVIDER=local OPENAI_BASE_URL=http://host.docker.internal:11434/v1 OPENAI_MODEL=llama3.1
+```
+
+**Sign-in.** `AUTH_PROVIDER` decides whether there is a sign-in screen at all:
+
+| Value | What it is |
+|---|---|
+| `none` (default) | No accounts. The app names its family with a header — a development bypass, refused unless `APP_ENV=development` |
+| `password` | Real accounts, email + password, no third party. Sign up in the app; a second parent signs up and joins with the invite code |
+| `mock` | The sign-in flow with no keys — the token is the email you claim to be. Development only |
+| `google` | Real Google Sign-In |
+
+`password` is the one to use for two phones sharing a family. Set a real `JWT_SECRET` with it;
+the server refuses to start with the shipped placeholder once auth is on outside development.
+
+Google needs the same OAuth client on both halves — the server verifies what the app was
+issued:
 
 ```bash
 AUTH_PROVIDER=google GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com docker compose up
 cd app && flutter run --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 ```
+
+## Tests
+
+```bash
+docker compose run --rm -e DB_NAME=dayby_test server \
+  sh -c "uv pip install --system -q pytest pytest-asyncio httpx && pytest -q"
+
+cd app && flutter test
+```
+
+The database name has to end in `_test` or the fixture that wipes it refuses to run. The one
+test that calls the real Gemini API skips itself when `GEMINI_API_KEY` is absent. Both suites
+are what CI runs on every push.
 
 ## Design highlights
 
@@ -130,6 +220,13 @@ cd app && flutter run --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.
 - **A window, not the recent hundred.** Records and Analysis fetch the range you pick — a
   day, a week, a month, all of it — from the server's `from`/`to`, so a long history is not
   hidden behind whatever last loaded on screen.
+- **Rules a family sets for itself.** "After a feed, remind me about vitamin D in 30 minutes"
+  becomes a stored rule, either from the Reminders screen or by saying it. The assistant turns
+  the active ones into scheduled notifications, so they arrive with the app closed — local
+  notifications, no push server.
+- **It also speaks first.** Next feed and next nappy are predicted from the median gap in this
+  baby's own recent rhythm, and dropped when that rhythm has gone stale; the week's trends come
+  from the same day tally the charts use. Arithmetic first, the model only writes it up.
 - **Bring your own model, even a local one.** `LLM_PROVIDER=local` points the same prompts
   at any OpenAI-compatible endpoint (a local Ollama or LM Studio), so the whole thing can
   run on your own machine with no hosted key.
@@ -139,20 +236,24 @@ cd app && flutter run --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.
 ```
 dayby/
 ├── docker-compose.yml       # FastAPI + MongoDB (local dev)
-├── .env.example
+├── .env.example             # every setting, with what it does
 ├── server/                  # FastAPI
 │   ├── app/
-│   │   ├── routers/         # ingest, events, families, photos, assistant, wrapped, live, auth
-│   │   ├── providers/       # llm/ , stt/ , auth/  (interface + mock + real)
+│   │   ├── routers/         # auth, families, ingest, events, photos, assistant, insights,
+│   │   │                    # stats, wrapped, live, routines, reminders, messages, tts
+│   │   ├── providers/       # llm/ , stt/ , tts/ , auth/  (interface + mock + real)
 │   │   │   └── llm/prompt.py  # every instruction the model is ever given
 │   │   ├── models/
 │   │   ├── care.py          # what "overdue" means, shared by the server and the mock
 │   │   └── context.py       # the babies and the chat every LLM call is handed
+│   ├── scripts/seed.py      # a week of demo records, for empty charts
 │   └── tests/
 └── app/                     # Flutter
     ├── lib/
-    │   ├── screens/         # home, log (chat), timeline, settings, wrapped
+    │   ├── screens/         # dashboard, log (chat), timeline, stats, wrapped, settings,
+    │   │                    # preferences, reminders, messages, onboarding, signin, lock
     │   ├── voice.dart       # recording, and when a sentence has ended
+    │   ├── config.dart      # the default server address
     │   └── api/
     ├── test/
     └── ios/
