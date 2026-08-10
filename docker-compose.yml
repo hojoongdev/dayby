@@ -26,7 +26,9 @@ services:
     build: ./server
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Host port only. Set PORT in .env if 8000 is already taken on your machine;
+      # the app's default server address changes with it.
+      - "${PORT:-8000}:8000"
     environment:
       # Point at your own MongoDB (self-hosted or Atlas) by setting MONGODB_URI in .env;
       # left unset, it uses the mongo container in this file.
@@ -40,6 +42,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-false}
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-45000}
       # OpenAI-compatible / local LLM (LLM_PROVIDER=openai or local). Point at Ollama,
       # LM Studio, or any hosted /chat/completions endpoint.
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://localhost:11434/v1}
@@ -48,7 +51,12 @@ services:
       AUTH_PROVIDER: ${AUTH_PROVIDER:-none}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       JWT_SECRET: ${JWT_SECRET:-dev-secret-not-for-production-generate-a-real-one}
-      APP_ENV: development
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-30}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-60}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+      # Anything but "development" turns off the X-Family-Id bypass and makes the
+      # startup check refuse a placeholder JWT_SECRET.
+      APP_ENV: ${APP_ENV:-development}
     depends_on:
       mongo:
         condition: service_healthy
